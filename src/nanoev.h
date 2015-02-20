@@ -74,21 +74,90 @@ void* nanoev_event_userdata(
 
 /*----------------------------------------------------------------------------*/
 
+typedef void (*nanoev_tcp_on_connect)(
+    nanoev_event *tcp, 
+    int status
+    );
+typedef void (*nanoev_tcp_on_accept)(
+    nanoev_event *tcp, 
+    int status,
+    nanoev_event *tcp_new
+    );
+typedef void (*nanoev_tcp_on_write)(
+    nanoev_event *tcp, 
+    int status, 
+    void *buf, 
+    unsigned int bytes
+    );
+typedef void (*nanoev_tcp_on_read)(
+    nanoev_event *tcp, 
+    int status, 
+    void *buf, 
+    unsigned int bytes
+    );
+
+int nanoev_tcp_connect(
+    nanoev_event *event, 
+    const char *ip, 
+    unsigned short port, 
+    nanoev_tcp_on_connect callback
+    );
+
+int nanoev_tcp_listen(
+    nanoev_event *event, 
+    const char *ip,
+    unsigned short port,
+    int backlog
+    );
+
+int nanoev_tcp_accept(
+    nanoev_event *event, 
+    nanoev_tcp_on_accept callback,
+    void *userdata
+    );
+
+int nanoev_tcp_write(
+    nanoev_event *event, 
+    const void *buf, 
+    unsigned int len,
+    nanoev_tcp_on_write callback
+    );
+
+int nanoev_tcp_read(
+    nanoev_event *event, 
+    void *buf, 
+    unsigned int len,
+    nanoev_tcp_on_read callback
+    );
+
+int nanoev_tcp_addr(
+    nanoev_event *event, 
+    int local,
+    char ip[16],
+    unsigned short *port
+    );
+
+int nanoev_tcp_error(
+    nanoev_event *event
+    );
+
+/*----------------------------------------------------------------------------*/
+
 typedef void (*nanoev_async_callback)(
     nanoev_event *async
     );
 
 void kgse_async_start(
-    nanoev_event *async,
+    nanoev_event *event,
     nanoev_async_callback callback
     );
 
 void kgse_async_send(
-    nanoev_event *async
+    nanoev_event *event
     );
 
 int kgse_async_pending(
-    nanoev_event *async
+    nanoev_event *event
     );
 
 /*----------------------------------------------------------------------------*/
