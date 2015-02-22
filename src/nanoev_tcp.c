@@ -229,7 +229,7 @@ ERROR_EXIT:
 int nanoev_tcp_accept(
     nanoev_event *event, 
     nanoev_tcp_on_accept callback, 
-    void *userdata
+    nanoev_tcp_alloc_userdata alloc_userdata
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
@@ -274,7 +274,7 @@ int nanoev_tcp_accept(
 
     add_outstanding_io(tcp->loop);
     tcp->wsa_buf.buf = (char*)socket_accept;
-    tcp->overlapped_write.Internal = (ULONG_PTR)userdata;  /* Tricky */
+    tcp->overlapped_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_accept = callback;
 
@@ -441,9 +441,10 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
     nanoev_tcp_on_read on_read;
     nanoev_tcp_on_connect on_connect;
     nanoev_tcp_on_accept on_accept;
+    nanoev_tcp_alloc_userdata alloc_userdata;
     SOCKET socket_accept;
-    void *userdata_new;
     nanoev_tcp *tcp_new;
+    void *userdata_new;
     int status;
     unsigned int bytes;
     int ret_code;
@@ -495,8 +496,9 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
             tcp->on_accept = NULL;
 
             socket_accept = (SOCKET)tcp->wsa_buf.buf;
-            userdata_new = (void*)tcp->overlapped_write.Internal;  /* Tricky */
+            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->overlapped_write.Internal;  /* Tricky */
             tcp_new = NULL;
+            userdata_new = NULL;
 
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
                 if (0 == status) {
@@ -509,10 +511,18 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
                         (char*)&tcp->sock, sizeof(tcp->sock));
                     ASSERT(0 == ret_code);
 
+                    /* alloc userdata */
+                    if (alloc_userdata) {
+                        userdata_new = alloc_userdata(1, NULL);
+                    }
+
                     tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
                     if (!tcp_new) {
                         /* out of memory */
                         closesocket(socket_accept);
+                        if (userdata_new) {
+                            alloc_userdata(0, userdata_new);  /* free userdata */
+                        }
                         status = WSAENOBUFS;
                     }
                 } else {
