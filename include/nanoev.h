@@ -84,8 +84,8 @@ typedef void (*nanoev_tcp_on_accept)(
     nanoev_event *tcp_new
     );
 typedef void* (*nanoev_tcp_alloc_userdata)(
-    int alloc,
-    void* p
+    void *context,
+    void *userdata
     );
 typedef void (*nanoev_tcp_on_write)(
     nanoev_event *tcp, 

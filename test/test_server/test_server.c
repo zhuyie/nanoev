@@ -36,8 +36,8 @@ static void on_accept(
     nanoev_event *tcp_new
     );
 static void* alloc_userdata(
-    int alloc,
-    void *p
+    void *context,
+    void *userdata
     );
 
 /*----------------------------------------------------------------------------*/
@@ -140,14 +140,14 @@ static void on_accept(
 }
 
 static void* alloc_userdata(
-    int alloc,
-    void *p
+    void *context,
+    void *userdata
     )
 {
-    if (alloc) {
+    if (!userdata) {
         return client_new();
     } else {
-        client_free((client*)p);
+        client_free((client*)userdata);
         return NULL;
     }
 }

@@ -513,7 +513,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
 
                     /* alloc userdata */
                     if (alloc_userdata) {
-                        userdata_new = alloc_userdata(1, NULL);
+                        userdata_new = alloc_userdata(tcp->userdata, NULL);
                     }
 
                     tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
@@ -521,7 +521,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
                         /* out of memory */
                         closesocket(socket_accept);
                         if (userdata_new) {
-                            alloc_userdata(0, userdata_new);  /* free userdata */
+                            alloc_userdata(tcp->userdata, userdata_new);  /* free userdata */
                         }
                         status = WSAENOBUFS;
                     }
