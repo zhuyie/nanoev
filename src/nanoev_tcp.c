@@ -501,32 +501,41 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
             userdata_new = NULL;
 
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
-                if (0 == status) {
-                    /**
-                       When the AcceptEx function returns, the socket sAcceptSocket is in the default state
-                       for a connected socket. The socket sAcceptSocket does not inherit the properties of the socket 
-                       associated with sListenSocket parameter until SO_UPDATE_ACCEPT_CONTEXT is set on the socket. 
-                     */
-                    ret_code = setsockopt(socket_accept, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
-                        (char*)&tcp->sock, sizeof(tcp->sock));
-                    ASSERT(0 == ret_code);
 
-                    /* alloc userdata */
-                    if (alloc_userdata) {
-                        userdata_new = alloc_userdata(tcp->userdata, NULL);
-                    }
+                if (status) {
+                    goto ON_ACCEPT_ERROR;
+                }
 
-                    tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
-                    if (!tcp_new) {
-                        /* out of memory */
-                        closesocket(socket_accept);
-                        if (userdata_new) {
-                            alloc_userdata(tcp->userdata, userdata_new);  /* free userdata */
-                        }
-                        status = WSAENOBUFS;
-                    }
-                } else {
+                /**
+                   When the AcceptEx function returns, the socket sAcceptSocket is in the default state
+                   for a connected socket. The socket sAcceptSocket does not inherit the properties of the socket 
+                   associated with sListenSocket parameter until SO_UPDATE_ACCEPT_CONTEXT is set on the socket. 
+                 */
+                ret_code = setsockopt(socket_accept, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
+                    (char*)&tcp->sock, sizeof(tcp->sock));
+                ASSERT(0 == ret_code);
+
+                /* alloc userdata */
+                if (alloc_userdata
+                    && !(userdata_new = alloc_userdata(tcp->userdata, NULL))
+                    ) {
+                    status = WSAENOBUFS;
+                    goto ON_ACCEPT_ERROR;
+                }
+
+                /* alloc a new tcp object */
+                tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
+                if (!tcp_new) {
+                    status = WSAENOBUFS;
+                    goto ON_ACCEPT_ERROR;
+                }
+
+ON_ACCEPT_ERROR:
+                if (status) {
                     closesocket(socket_accept);
+                    if (userdata_new) {
+                        alloc_userdata(tcp->userdata, userdata_new);  /* free userdata */
+                    }
                 }
 
                 ASSERT(on_accept);
