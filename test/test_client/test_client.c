@@ -8,7 +8,8 @@
 
 /*----------------------------------------------------------------------------*/
 
-const char *out_msg = "Hello, Server!";
+const char *out_msg = "Hello, World!";
+static int times = 5;
 
 typedef enum {
     client_state_init = 0,
@@ -18,11 +19,11 @@ typedef enum {
 
 typedef struct {
     client_state state;
-    unsigned int transfered;
 
     unsigned char *out_buf;
     unsigned int out_buf_capacity;
     unsigned int out_buf_size;
+    unsigned int out_buf_sent;
 
     unsigned char *in_buf;
     unsigned int in_buf_capacity;
@@ -31,9 +32,9 @@ typedef struct {
 
 static client* client_new();
 static void client_free(client *c);
-static int write_request_to_buf(client *c, const char *msg);
-static int ensure_response_buf(client *c, unsigned int capacity);
-static int get_response_remain_size(client *c);
+static int ensure_in_buf(client *c, unsigned int capacity);
+static int get_remain_size(client *c);
+static int write_to_buf(client *c, const char *msg);
 
 static void on_connect(
     nanoev_event *tcp, 
@@ -96,10 +97,10 @@ static client* client_new()
     client *c = (client*)malloc(sizeof(client));
     if (c) {
         c->state = client_state_init;
-        c->transfered = 0;
         c->out_buf = NULL;
         c->out_buf_capacity = 0;
         c->out_buf_size = 0;
+        c->out_buf_sent = 0;
         c->in_buf = NULL;
         c->in_buf_capacity = 0;
         c->in_buf_size = 0;
@@ -114,32 +115,11 @@ static void client_free(client *c)
     free(c);
 }
 
-static int write_request_to_buf(client *c, const char *msg)
+static int ensure_in_buf(client *c, unsigned int capacity)
 {
-    unsigned int len = strlen(msg) + 1;
-    
-    unsigned int required_cb = sizeof(unsigned int) + len;
-    if (c->out_buf_capacity < required_cb) {
-        void *new_buf = realloc(c->out_buf, required_cb);
-        if (!new_buf)
-            return -1;
-        c->out_buf = (unsigned char *)new_buf;
-        c->out_buf_capacity = required_cb;
-    }
-    
-    *((unsigned int*)c->out_buf) = len;
-    c->out_buf_size = sizeof(unsigned int);
-
-    memcpy(c->out_buf + c->out_buf_size, msg, len);
-    c->out_buf_size += len;
-
-    return 0;
-}
-
-static int ensure_response_buf(client *c, unsigned int capacity)
-{
+    void *new_buf;
     if (c->in_buf_capacity < capacity) {
-        void *new_buf = realloc(c->in_buf, capacity);
+        new_buf = realloc(c->in_buf, capacity);
         if (!new_buf)
             return -1;
         c->in_buf = (unsigned char*)new_buf;
@@ -148,7 +128,7 @@ static int ensure_response_buf(client *c, unsigned int capacity)
     return 0;
 }
 
-static int get_response_remain_size(client *c)
+static int get_remain_size(client *c)
 {
     unsigned int total;
     if (c->in_buf_size < sizeof(unsigned int)) {
@@ -157,6 +137,28 @@ static int get_response_remain_size(client *c)
         total = sizeof(unsigned int) + *((unsigned int*)c->in_buf);
     }
     return total - c->in_buf_size;
+}
+
+static int write_to_buf(client *c, const char *msg)
+{
+    unsigned int len = strlen(msg) + 1;
+
+    unsigned int required_cb = sizeof(unsigned int) + len;
+    if (c->out_buf_capacity < required_cb) {
+        void *new_buf = realloc(c->out_buf, required_cb);
+        if (!new_buf)
+            return -1;
+        c->out_buf = (unsigned char *)new_buf;
+        c->out_buf_capacity = required_cb;
+    }
+
+    *((unsigned int*)c->out_buf) = len;
+    c->out_buf_size = sizeof(unsigned int);
+
+    memcpy(c->out_buf + c->out_buf_size, msg, len);
+    c->out_buf_size += len;
+
+    return 0;
 }
 
 static void on_connect(
@@ -174,16 +176,12 @@ static void on_connect(
     
     c = (client*)nanoev_event_userdata(tcp);
     ASSERT(c->state == client_state_init);
-    ASSERT(c->transfered == 0);
 
-    ret_code = write_request_to_buf(c, out_msg);
+    ret_code = write_to_buf(c, out_msg);
     if (ret_code != 0) {
-        printf("write_request_to_buf failed\n");
+        printf("write_to_buf failed\n");
         return;
     }
-    
-    ASSERT(c->out_buf);
-    ASSERT(c->out_buf_size);
     ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, on_write);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_write failed, code = %d\n", ret_code);
@@ -212,11 +210,11 @@ static void on_write(
     c = (client*)nanoev_event_userdata(tcp);
     ASSERT(c->state == client_state_send);
 
-    c->transfered += bytes;
+    c->out_buf_sent += bytes;
 
-    if (c->transfered < c->out_buf_size) {
+    if (c->out_buf_sent < c->out_buf_size) {
         /* 继续发送剩余的数据 */
-        ret_code = nanoev_tcp_write(tcp, c->out_buf + c->transfered, c->out_buf_size - c->transfered, on_write);
+        ret_code = nanoev_tcp_write(tcp, c->out_buf + c->out_buf_sent, c->out_buf_size - c->out_buf_sent, on_write);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
             return;
@@ -224,15 +222,12 @@ static void on_write(
 
     } else {
         /* 开始接收响应 */
-        c->transfered = 0;
         c->in_buf_size = 0;
-
-        ret_code = ensure_response_buf(c, 100);
+        ret_code = ensure_in_buf(c, 100);
         if (ret_code != 0) {
-            printf("ensure_response_buf failed\n");
+            printf("ensure_in_buf failed\n");
             return;
         }
-
         ret_code = nanoev_tcp_read(tcp, c->in_buf, c->in_buf_capacity, on_read);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_read failed, code = %d\n", ret_code);
@@ -266,18 +261,16 @@ static void on_read(
     c = (client*)nanoev_event_userdata(tcp);
     ASSERT(c->state == client_state_recv);
 
-    c->transfered += bytes;
     c->in_buf_size += bytes;
 
-    bytes = get_response_remain_size(c);
+    bytes = get_remain_size(c);
     if (bytes > 0) {
         /* 继续接收剩余的response */
-        ret_code = ensure_response_buf(c, c->in_buf_size + bytes);
+        ret_code = ensure_in_buf(c, c->in_buf_size + bytes);
         if (ret_code != 0) {
-            printf("ensure_response_buf failed\n");
+            printf("ensure_in_buf failed\n");
             return;
         }
-
         ret_code = nanoev_tcp_read(tcp, c->in_buf + c->in_buf_size, bytes, on_read);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_read failed, code = %d\n", ret_code);
@@ -289,5 +282,23 @@ static void on_read(
         ASSERT(c->in_buf);
         ASSERT(c->in_buf_size);
         printf("Server return %u bytes : %s\n", c->in_buf_size, c->in_buf + sizeof(unsigned int));
+        
+        --times;
+        if (times > 0) {
+            /* 继续发送下一个request */
+            c->out_buf_sent = 0;
+            ret_code = write_to_buf(c, out_msg);
+            if (ret_code != 0) {
+                printf("write_to_buf failed\n");
+                return;
+            }
+            ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, on_write);
+            if (ret_code != NANOEV_SUCCESS) {
+                printf("nanoev_tcp_write failed, code = %d\n", ret_code);
+                return;
+            }
+
+            c->state = client_state_send;
+        }
     }
 }
