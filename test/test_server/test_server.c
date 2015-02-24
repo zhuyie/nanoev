@@ -6,6 +6,9 @@
 #include <assert.h>
 #define ASSERT assert
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 /*----------------------------------------------------------------------------*/
 
 typedef enum {
@@ -54,8 +57,19 @@ static void on_read(
     void *buf, 
     unsigned int bytes
     );
+static void on_async(
+    nanoev_event *async
+    );
 
 /*----------------------------------------------------------------------------*/
+
+static nanoev_event *async_for_ctrl_c;
+static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
+{
+    ASSERT(async_for_ctrl_c);
+    nanoev_async_send(async_for_ctrl_c);
+    return TRUE;
+}
 
 int main(int argc, char* argv[])
 {
@@ -64,6 +78,7 @@ int main(int argc, char* argv[])
     unsigned short port;
     nanoev_loop *loop;
     nanoev_event *tcp;
+    nanoev_event *async;
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -73,6 +88,8 @@ int main(int argc, char* argv[])
 
     tcp = nanoev_event_new(nanoev_event_tcp, loop, NULL);
     ASSERT(tcp);
+    async = nanoev_event_new(nanoev_event_async, loop, NULL);
+    ASSERT(async);
 
     ip = "0.0.0.0";
     port = 4000;
@@ -80,13 +97,19 @@ int main(int argc, char* argv[])
     ASSERT(ret_code == NANOEV_SUCCESS);
     ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
     ASSERT(ret_code == NANOEV_SUCCESS);
-    printf("Listening at %s:%d...\n", ip, (int)port);
+    printf("Listening at %s:%d\n", ip, (int)port);
+
+    nanoev_async_start(async, on_async);
+    async_for_ctrl_c = async;
+    SetConsoleCtrlHandler(CtrlCHandler, TRUE);
+    printf("Press Ctrl+C to break...\n");
 
     ret_code = nanoev_loop_run(loop);
     ASSERT(ret_code == NANOEV_SUCCESS);
     
     nanoev_event_free(tcp);
-    
+    nanoev_event_free(async);
+
     nanoev_loop_free(loop);
     
     nanoev_term();
@@ -350,4 +373,13 @@ static void on_read(
 ERROR_EXIT:
     nanoev_event_free(tcp);
     client_free(c);
+}
+
+static void on_async(
+    nanoev_event *async
+    )
+{
+    nanoev_loop *loop = nanoev_event_loop(async);
+    printf("Bye\n");
+    nanoev_loop_break(loop);
 }

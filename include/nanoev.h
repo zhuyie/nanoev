@@ -151,16 +151,16 @@ typedef void (*nanoev_async_callback)(
     nanoev_event *async
     );
 
-void kgse_async_start(
+void nanoev_async_start(
     nanoev_event *event,
     nanoev_async_callback callback
     );
 
-void kgse_async_send(
+void nanoev_async_send(
     nanoev_event *event
     );
 
-int kgse_async_pending(
+int nanoev_async_pending(
     nanoev_event *event
     );
 
