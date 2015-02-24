@@ -576,9 +576,17 @@ ON_ACCEPT_ERROR:
 nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket)
 {
     nanoev_tcp *tcp = (nanoev_tcp*)tcp_new(loop, userdata);
-    if (tcp) {
-        tcp->flags |= NANOEV_TCP_FLAG_CONNECTED;
-        tcp->sock = socket;
+    if (!tcp)
+        return NULL;
+
+    /* Associate the socket with IOCP */
+    if (register_proactor_to_loop((nanoev_proactor*)tcp, socket, loop)) {
+        tcp_free((nanoev_event*)tcp);
+        return NULL;
     }
+
+    tcp->flags |= NANOEV_TCP_FLAG_CONNECTED;
+    tcp->sock = socket;
+    
     return tcp;
 }
