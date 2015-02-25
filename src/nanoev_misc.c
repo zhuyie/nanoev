@@ -9,6 +9,11 @@ void* mem_alloc(size_t sz)
     return malloc(sz);
 }
 
+void* mem_realloc(void *mem, size_t sz)
+{
+    return realloc(mem, sz);
+}
+
 void  mem_free(void *mem)
 {
     free(mem);

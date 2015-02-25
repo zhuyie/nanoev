@@ -9,7 +9,8 @@ struct nanoev_loop {
     DWORD threadID;                               /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     int outstanding_io_count;
-    int timer_count;
+    struct nanoev_timeval now;
+    min_heap timer_min_heap;
 };
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
@@ -49,6 +50,8 @@ void nanoev_loop_free(nanoev_loop *loop)
 
     __process_endgame_proactor(loop, 1);
 
+    min_heap_free(&loop->timer_min_heap);
+
     mem_free(loop);
 }
 
@@ -67,7 +70,7 @@ int nanoev_loop_run(nanoev_loop *loop)
     ASSERT(loop->threadID == 0);
     loop->threadID = GetCurrentThreadId();
 
-    while (loop->timer_count || loop->outstanding_io_count) {
+    while (loop->timer_min_heap.size || loop->outstanding_io_count) {
         /* process lazy-delete proactor */
         __process_endgame_proactor(loop, 0);
 

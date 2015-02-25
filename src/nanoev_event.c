@@ -22,6 +22,10 @@ nanoev_event* nanoev_event_new(
         event = async_new(loop, userdata);
         break;
 
+    case nanoev_event_timer:
+        event = timer_new(loop, userdata);
+        break;
+
     default:
         ASSERT(0);
         event = NULL;
@@ -44,6 +48,10 @@ void nanoev_event_free(
 
     case nanoev_event_async:
         async_free(event);
+        break;
+
+    case nanoev_event_timer:
+        timer_free(event);
         break;
 
     default:
