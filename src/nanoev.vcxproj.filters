@@ -34,5 +34,8 @@
     <ClCompile Include="nanoev_tcp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="nanoev_timer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

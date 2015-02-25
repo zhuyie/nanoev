@@ -15,6 +15,7 @@
 /*----------------------------------------------------------------------------*/
 
 void* mem_alloc(size_t sz);
+void* mem_realloc(void *mem, size_t sz);
 void  mem_free(void *mem);
 
 /*----------------------------------------------------------------------------*/
@@ -44,6 +45,9 @@ void tcp_free(nanoev_event *event);
 nanoev_event* async_new(nanoev_loop *loop, void *userdata);
 void async_free(nanoev_event *event);
 
+nanoev_event* timer_new(nanoev_loop *loop, void *userdata);
+void timer_free(nanoev_event *event);
+
 /*----------------------------------------------------------------------------*/
 
 struct nanoev_proactor;
@@ -70,6 +74,19 @@ int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_lo
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
 void add_outstanding_io(nanoev_loop *loop);
 void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped);
+
+/*----------------------------------------------------------------------------*/
+
+typedef struct min_heap {
+    nanoev_event **events;
+    int capacity;
+    int size;
+} min_heap;
+
+void min_heap_free(min_heap *h);
+int min_heap_reserve(min_heap *h, int capacity);
+int min_heap_erase(min_heap *h, nanoev_event *event);
+nanoev_event* min_heap_top(min_heap *h);
 
 /*----------------------------------------------------------------------------*/
 
