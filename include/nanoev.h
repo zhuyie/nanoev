@@ -7,7 +7,8 @@
 #define NANOEV_SUCCESS             0
 #define NANOEV_ERROR_INVALID_ARG   1
 #define NANOEV_ERROR_ACCESS_DENIED 2
-#define NANOEV_ERROR_FAIL          3
+#define NANOEV_ERROR_OUT_OF_MEMORY 3
+#define NANOEV_ERROR_FAIL          4
 
 /*----------------------------------------------------------------------------*/
 
@@ -161,6 +162,27 @@ void nanoev_async_send(
     );
 
 int nanoev_async_pending(
+    nanoev_event *event
+    );
+
+/*----------------------------------------------------------------------------*/
+
+struct nanoev_timeval {
+    unsigned int tv_sec;     /* seconds */
+    unsigned int tv_usec;    /* microseconds */
+};
+
+typedef void (*nanoev_timer_callback)(
+    nanoev_event *timer
+    );
+
+int nanoev_timer_add(
+    nanoev_event *event,
+    struct nanoev_timeval after,
+    nanoev_timer_callback callback
+    );
+
+int nanoev_timer_del(
     nanoev_event *event
     );
 
