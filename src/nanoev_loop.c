@@ -124,6 +124,13 @@ void* nanoev_loop_userdata(nanoev_loop *loop)
     return loop->userdata;
 }
 
+void nanoev_loop_now(nanoev_loop *loop, struct nanoev_timeval *now)
+{
+    ASSERT(loop);
+    ASSERT(now);
+    *now = loop->now;
+}
+
 /*----------------------------------------------------------------------------*/
 
 int in_loop_thread(nanoev_loop *loop)

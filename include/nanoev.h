@@ -20,6 +20,7 @@ void nanoev_term();
 
 struct nanoev_loop;
 typedef struct nanoev_loop nanoev_loop;
+struct nanoev_timeval;
 
 nanoev_loop* nanoev_loop_new(
     void *userdata
@@ -38,6 +39,11 @@ void nanoev_loop_break(
     );
 
 void* nanoev_loop_userdata();
+
+void nanoev_loop_now(
+    nanoev_loop *loop,
+    struct nanoev_timeval *now
+    );
 
 /*----------------------------------------------------------------------------*/
 
