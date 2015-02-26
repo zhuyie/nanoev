@@ -21,6 +21,65 @@ void  mem_free(void *mem)
 
 /*----------------------------------------------------------------------------*/
 
+#define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
+
+void nanoev_now(struct nanoev_timeval *tv)
+{
+    FILETIME ft;
+    unsigned __int64 tmpres = 0;
+
+    GetSystemTimeAsFileTime(&ft);
+
+    tmpres = ft.dwHighDateTime;
+    tmpres <<= 32;
+    tmpres |= ft.dwLowDateTime;
+
+    /* convert into microseconds */
+    tmpres /= 10;
+    /* converting file time to unix epoch */
+    tmpres -= DELTA_EPOCH_IN_MICROSECS; 
+
+    tv->tv_sec = (unsigned int)(tmpres / 1000000UL);
+    tv->tv_usec = (unsigned int)(tmpres % 1000000UL);
+}
+
+void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add)
+{
+    unsigned int microseconds = tv->tv_usec + add->tv_usec;
+    unsigned int seconds = microseconds / 1000000;
+    microseconds %= 1000000;
+    tv->tv_sec += add->tv_sec + seconds;
+    tv->tv_usec = microseconds;
+}
+
+void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub)
+{
+    unsigned long long usec0 = tv->tv_sec * 1000000 + tv->tv_usec;
+    unsigned long long usec1 = sub->tv_sec * 1000000 + sub->tv_usec;
+    ASSERT(usec0 >= usec1);
+    usec0 -= usec1;
+    tv->tv_sec = (unsigned int)(usec0 / 1000000);
+    tv->tv_usec = usec0 % 1000000;
+}
+
+int time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1)
+{
+    if (tv0->tv_sec > tv1->tv_sec) {
+        return 1;
+    } else if (tv0->tv_sec < tv1->tv_sec) {
+        return -1;
+    } else {
+        if (tv0->tv_usec > tv1->tv_usec)
+            return 1;
+        else if (tv0->tv_usec < tv1->tv_usec)
+            return -1;
+        else
+            return 0;
+    }
+}
+
+/*----------------------------------------------------------------------------*/
+
 #define NTSTATUS LONG
 
 #ifndef STATUS_HOPLIMIT_EXCEEDED

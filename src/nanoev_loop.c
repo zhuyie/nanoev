@@ -10,7 +10,7 @@ struct nanoev_loop {
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     int outstanding_io_count;
     struct nanoev_timeval now;
-    min_heap timer_min_heap;
+    timer_min_heap timers;
 };
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
@@ -38,6 +38,8 @@ nanoev_loop* nanoev_loop_new(void *userdata)
         return NULL;
     }
 
+    timers_init(&loop->timers);
+
     return loop;
 }
 
@@ -50,7 +52,7 @@ void nanoev_loop_free(nanoev_loop *loop)
 
     __process_endgame_proactor(loop, 1);
 
-    min_heap_free(&loop->timer_min_heap);
+    timers_term(&loop->timers);
 
     mem_free(loop);
 }
@@ -66,11 +68,14 @@ int nanoev_loop_run(nanoev_loop *loop)
     ASSERT(loop);
     ASSERT(loop->iocp);
 
-    /* record the current thread ID */
+    /* record the running thread ID */
     ASSERT(loop->threadID == 0);
     loop->threadID = GetCurrentThreadId();
 
-    while (loop->timer_min_heap.size || loop->outstanding_io_count) {
+    while (loop->timers.size || loop->outstanding_io_count) {
+        /* update time */
+        nanoev_now(&loop->now);
+
         /* process lazy-delete proactor */
         __process_endgame_proactor(loop, 0);
 
@@ -106,6 +111,7 @@ int nanoev_loop_run(nanoev_loop *loop)
         __process_timer(loop);
     }
 
+    /* clear the running thread ID */
     loop->threadID = 0;
 
     return ret_code;
@@ -128,7 +134,16 @@ void nanoev_loop_now(nanoev_loop *loop, struct nanoev_timeval *now)
 {
     ASSERT(loop);
     ASSERT(now);
-    *now = loop->now;
+    if (loop->now.tv_sec || loop->now.tv_usec)
+        *now = loop->now;
+    else
+        nanoev_now(now);
+}
+
+timer_min_heap* get_loop_timers(nanoev_loop *loop)
+{
+    ASSERT(loop);
+    return &loop->timers;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -192,10 +207,16 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
 
 static DWORD __get_poll_timeout(nanoev_loop *loop)
 {
-    return INFINITE;
+    unsigned int timeout = timers_timeout(&loop->timers, &loop->now);
+    return timeout;
 }
 
 static void __process_timer(nanoev_loop *loop)
 {
+    int ret_code;
+
+    ret_code = timers_process(&loop->timers, &loop->now);
+    ASSERT(ret_code == NANOEV_SUCCESS);
+
     return;
 }

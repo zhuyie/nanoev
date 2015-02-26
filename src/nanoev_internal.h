@@ -77,16 +77,22 @@ void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overl
 
 /*----------------------------------------------------------------------------*/
 
-typedef struct min_heap {
+typedef struct timer_min_heap {
     nanoev_event **events;
-    int capacity;
-    int size;
-} min_heap;
+    unsigned int capacity;
+    unsigned int size;
+} timer_min_heap;
 
-void min_heap_free(min_heap *h);
-int min_heap_reserve(min_heap *h, int capacity);
-int min_heap_erase(min_heap *h, nanoev_event *event);
-nanoev_event* min_heap_top(min_heap *h);
+void timers_init(timer_min_heap *h);
+void timers_term(timer_min_heap *h);
+unsigned int timers_timeout(timer_min_heap *h, const struct nanoev_timeval *now);
+int  timers_process(timer_min_heap *h, const struct nanoev_timeval *now);
+
+timer_min_heap* get_loop_timers(nanoev_loop *loop);
+
+void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add);
+void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub);
+int  time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1);
 
 /*----------------------------------------------------------------------------*/
 

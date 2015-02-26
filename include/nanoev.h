@@ -178,6 +178,10 @@ struct nanoev_timeval {
     unsigned int tv_usec;    /* microseconds */
 };
 
+void nanoev_now(
+    struct nanoev_timeval *now
+    );
+
 typedef void (*nanoev_timer_callback)(
     nanoev_event *timer
     );
