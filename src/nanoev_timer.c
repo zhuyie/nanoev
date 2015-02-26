@@ -12,8 +12,8 @@ typedef struct nanoev_timer nanoev_timer;
 
 static int min_heap_reserve(timer_min_heap *h, unsigned int capacity);
 static void min_heap_erase(timer_min_heap *h, nanoev_timer *t);
-static void	min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
-static void	min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
+static void min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
+static void min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
 
 /*----------------------------------------------------------------------------*/
 
@@ -191,7 +191,7 @@ static void min_heap_erase(timer_min_heap *h, nanoev_timer *t)
     }
 }
 
-static void	min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
+static void min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
 {
     unsigned int parent = (hole_index - 1) / 2;
     while (hole_index && time_greater((nanoev_timer*)h->events[parent], t)) {
@@ -206,7 +206,7 @@ static void	min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev
     t->min_heap_idx = hole_index;
 }
 
-static void	min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
+static void min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
 {
     unsigned int min_child = 2 * (hole_index + 1);
     while (min_child <= h->size) {
