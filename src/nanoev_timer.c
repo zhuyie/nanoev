@@ -17,6 +17,9 @@ static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer);
 static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 
+#define NANOEV_TIMER_FLAG_INVOKING_CALLBACK  (0x00000001) /* mark for delete */
+#define NANOEV_TIMER_FLAG_DELETED            (0x80000000) /* mark for delete */
+
 /*----------------------------------------------------------------------------*/
 
 nanoev_event* timer_new(nanoev_loop *loop, void *userdata)
@@ -40,11 +43,16 @@ nanoev_event* timer_new(nanoev_loop *loop, void *userdata)
 void timer_free(nanoev_event *event)
 {
     nanoev_timer *timer = (nanoev_timer*)event;
-    
-    timer_min_heap *heap = get_loop_timers(timer->loop);
-    min_heap_erase(heap, timer);
+    ASSERT(!(timer->flags & NANOEV_TIMER_FLAG_DELETED));
 
-    mem_free(timer);
+    if (!(timer->flags | NANOEV_TIMER_FLAG_INVOKING_CALLBACK)) {
+        timer_min_heap *heap = get_loop_timers(timer->loop);
+        min_heap_erase(heap, timer);
+
+        mem_free(timer);
+    } else {
+        timer->flags |= NANOEV_TIMER_FLAG_DELETED;
+    }
 }
 
 int nanoev_timer_add(
@@ -145,15 +153,20 @@ void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now)
         if (time_cmp(&top->timeout, now) > 0)
             break;
 
-        /* Invoke callback */
-        top->callback((nanoev_event*)top);
-
         /* Erase from the heap */
         min_heap_erase(heap, top);
 
-        /* Add back if top is a repeating timer */
-        if (top->repeat) {
+        /* Invoke callback */
+        top->flags |= NANOEV_TIMER_FLAG_INVOKING_CALLBACK;
+        top->callback((nanoev_event*)top);
+        top->flags &= ~NANOEV_TIMER_FLAG_INVOKING_CALLBACK;
+
+        if (top->flags & NANOEV_TIMER_FLAG_DELETED) {  /* freed during callback */
+            mem_free(top);
+
+        } else if (top->repeat) {  /* Add back if top is a repeating timer */
             top->timeout = *now;
+
             time_add(&top->timeout, &top->after);
 
             min_heap_shift_up(heap, heap->size, top);
