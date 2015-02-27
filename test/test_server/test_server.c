@@ -11,6 +11,8 @@
 
 /*----------------------------------------------------------------------------*/
 
+#define TIMEOUT_SECONDS 30
+
 typedef enum {
     client_state_init = 0,
     client_state_send,
@@ -28,9 +30,12 @@ typedef struct {
     unsigned char *in_buf;
     unsigned int in_buf_capacity;
     unsigned int in_buf_size;
+
+    nanoev_event *tcp;
+    nanoev_event *timeout_timer;
 } client;
 
-static client* client_new();
+static client* client_new(nanoev_loop *loop);
 static void client_free(client *c);
 static int ensure_in_buf(client *c, unsigned int capacity);
 static int get_remain_size(client *c);
@@ -60,6 +65,9 @@ static void on_read(
 static void on_async(
     nanoev_event *async
     );
+static void on_timer(
+    nanoev_event *timer
+    );
 
 /*----------------------------------------------------------------------------*/
 
@@ -71,9 +79,14 @@ static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
     return TRUE;
 }
 
+typedef struct {
+    nanoev_loop *loop;
+} global_data;
+
 int main(int argc, char* argv[])
 {
     int ret_code;
+    global_data global;
     const char *ip;
     unsigned short port;
     nanoev_loop *loop;
@@ -86,7 +99,9 @@ int main(int argc, char* argv[])
     loop = nanoev_loop_new(NULL);
     ASSERT(loop);
 
-    tcp = nanoev_event_new(nanoev_event_tcp, loop, NULL);
+    global.loop = loop;
+
+    tcp = nanoev_event_new(nanoev_event_tcp, loop, &global);
     ASSERT(tcp);
     async = nanoev_event_new(nanoev_event_async, loop, NULL);
     ASSERT(async);
@@ -119,7 +134,7 @@ int main(int argc, char* argv[])
 
 /*----------------------------------------------------------------------------*/
 
-static client* client_new()
+static client* client_new(nanoev_loop *loop)
 {
     client *c = (client*)malloc(sizeof(client));
     if (c) {
@@ -131,6 +146,9 @@ static client* client_new()
         c->in_buf = NULL;
         c->in_buf_capacity = 0;
         c->in_buf_size = 0;
+        c->tcp = NULL;
+        c->timeout_timer = nanoev_event_new(nanoev_event_timer, loop, c);
+        ASSERT(c->timeout_timer);
     }
     return c;
 }
@@ -139,6 +157,7 @@ static void client_free(client *c)
 {
     free(c->out_buf);
     free(c->in_buf);
+    nanoev_event_free(c->timeout_timer);
     free(c);
 }
 
@@ -197,6 +216,7 @@ static void on_accept(
     char ip[16];
     unsigned short port;
     client *c;
+    struct nanoev_timeval after; 
     int ret_code;
 
     if (status) {
@@ -207,6 +227,8 @@ static void on_accept(
     ASSERT(tcp_new);
     c = (client*)nanoev_event_userdata(tcp_new);
     ASSERT(c);
+
+    c->tcp = tcp_new;
 
     ret_code = nanoev_tcp_addr(tcp_new, 0, ip, &port);
     if (ret_code != NANOEV_SUCCESS) {
@@ -224,6 +246,13 @@ static void on_accept(
     ret_code = nanoev_tcp_read(tcp_new, c->in_buf, c->in_buf_capacity, on_read);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_read failed, code = %u\n", ret_code);
+        goto ON_ACCEPT_ERROR;
+    }
+    after.tv_sec = TIMEOUT_SECONDS;
+    after.tv_usec = 0;
+    ret_code = nanoev_timer_add(c->timeout_timer, after, 0, on_timer);
+    if (ret_code != NANOEV_SUCCESS) {
+        printf("nanoev_timer_add failed, code = %u\n", ret_code);
         goto ON_ACCEPT_ERROR;
     }
 
@@ -248,8 +277,11 @@ static void* alloc_userdata(
     void *userdata
     )
 {
+    global_data *global = (global_data*)context;
+    ASSERT(global);
+
     if (!userdata) {
-        return client_new();
+        return client_new(global->loop);
     } else {
         client_free((client*)userdata);
         return NULL;
@@ -264,10 +296,13 @@ static void on_write(
     )
 {
     client *c;
+    struct nanoev_timeval after;
     int ret_code;
 
     c = (client*)nanoev_event_userdata(tcp);
     ASSERT(c->state == client_state_send);
+
+    nanoev_timer_del(c->timeout_timer);
 
     if (status) {
         printf("on_read status = %d\n", status);
@@ -284,6 +319,13 @@ static void on_write(
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
             goto ERROR_EXIT;
         }
+        after.tv_sec = TIMEOUT_SECONDS;
+        after.tv_usec = 0;
+        ret_code = nanoev_timer_add(c->timeout_timer, after, 0, on_timer);
+        if (ret_code != NANOEV_SUCCESS) {
+            printf("nanoev_timer_add failed, code = %u\n", ret_code);
+            goto ERROR_EXIT;
+        }
 
     } else {
         /* 开始接收下一个request */
@@ -294,6 +336,13 @@ static void on_write(
         ret_code = nanoev_tcp_read(tcp, c->in_buf, c->in_buf_capacity, on_read);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_read failed, code = %u\n", ret_code);
+            goto ERROR_EXIT;
+        }
+        after.tv_sec = TIMEOUT_SECONDS;
+        after.tv_usec = 0;
+        ret_code = nanoev_timer_add(c->timeout_timer, after, 0, on_timer);
+        if (ret_code != NANOEV_SUCCESS) {
+            printf("nanoev_timer_add failed, code = %u\n", ret_code);
             goto ERROR_EXIT;
         }
 
@@ -315,10 +364,13 @@ static void on_read(
     )
 {
     client *c;
+    struct nanoev_timeval after;
     int ret_code;
 
     c = (client*)nanoev_event_userdata(tcp);
     ASSERT(c->state == client_state_recv);
+
+    nanoev_timer_del(c->timeout_timer);
 
     if (status) {
         printf("on_read status = %d\n", status);
@@ -346,6 +398,13 @@ static void on_read(
             printf("nanoev_tcp_read failed, code = %d\n", ret_code);
             goto ERROR_EXIT;
         }
+        after.tv_sec = TIMEOUT_SECONDS;
+        after.tv_usec = 0;
+        ret_code = nanoev_timer_add(c->timeout_timer, after, 0, on_timer);
+        if (ret_code != NANOEV_SUCCESS) {
+            printf("nanoev_timer_add failed, code = %u\n", ret_code);
+            goto ERROR_EXIT;
+        }
 
     } else {
         /* 这个request的数据完整了，生成response */
@@ -363,6 +422,13 @@ static void on_read(
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
             return;
+        }
+        after.tv_sec = TIMEOUT_SECONDS;
+        after.tv_usec = 0;
+        ret_code = nanoev_timer_add(c->timeout_timer, after, 0, on_timer);
+        if (ret_code != NANOEV_SUCCESS) {
+            printf("nanoev_timer_add failed, code = %u\n", ret_code);
+            goto ERROR_EXIT;
         }
 
         c->state = client_state_send;
@@ -382,4 +448,14 @@ static void on_async(
     nanoev_loop *loop = nanoev_event_loop(async);
     printf("Bye\n");
     nanoev_loop_break(loop);
+}
+
+static void on_timer(
+    nanoev_event *timer
+    )
+{
+    client *c = (client*)nanoev_event_userdata(timer);
+    printf("TCP Reading/Writing Timeout\n");
+    nanoev_event_free(c->tcp);
+    client_free(c);
 }
