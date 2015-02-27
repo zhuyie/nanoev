@@ -14,8 +14,6 @@ struct nanoev_loop {
 };
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
-static DWORD __get_poll_timeout(nanoev_loop *loop);
-static void __process_timer(nanoev_loop *loop);
 static const ULONG_PTR loop_break_key = (ULONG_PTR)-1;
 
 /*----------------------------------------------------------------------------*/
@@ -59,8 +57,9 @@ void nanoev_loop_free(nanoev_loop *loop)
 
 int nanoev_loop_run(nanoev_loop *loop)
 {
+    unsigned int timeout;
     nanoev_proactor *proactor;
-    DWORD bytes, timeout;
+    DWORD bytes;
     ULONG_PTR key;
     OVERLAPPED *overlapped;
     int ret_code = NANOEV_SUCCESS;
@@ -80,7 +79,7 @@ int nanoev_loop_run(nanoev_loop *loop)
         __process_endgame_proactor(loop, 0);
 
         /* get a appropriate time-out */
-        timeout = __get_poll_timeout(loop);
+        timeout = timers_timeout(&loop->timers, &loop->now);
 
         /* try to dequeue a completion package */
         overlapped = NULL;
@@ -108,7 +107,7 @@ int nanoev_loop_run(nanoev_loop *loop)
         }
 
         /* process timer */
-        __process_timer(loop);
+        timers_process(&loop->timers, &loop->now);
     }
 
     /* clear the running thread ID */
@@ -203,20 +202,4 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
             cur = &((*cur)->next);
         }
     }
-}
-
-static DWORD __get_poll_timeout(nanoev_loop *loop)
-{
-    unsigned int timeout = timers_timeout(&loop->timers, &loop->now);
-    return timeout;
-}
-
-static void __process_timer(nanoev_loop *loop)
-{
-    int ret_code;
-
-    ret_code = timers_process(&loop->timers, &loop->now);
-    ASSERT(ret_code == NANOEV_SUCCESS);
-
-    return;
 }

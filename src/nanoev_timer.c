@@ -10,10 +10,10 @@ struct nanoev_timer {
 };
 typedef struct nanoev_timer nanoev_timer;
 
-static int min_heap_reserve(timer_min_heap *h, unsigned int capacity);
-static void min_heap_erase(timer_min_heap *h, nanoev_timer *t);
-static void min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
-static void min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t);
+static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity);
+static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer);
+static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
+static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 
 /*----------------------------------------------------------------------------*/
 
@@ -96,133 +96,151 @@ int nanoev_timer_del(
 
 /*----------------------------------------------------------------------------*/
 
-void timers_init(timer_min_heap *h)
+void timers_init(timer_min_heap *heap)
 {
-    ASSERT(h);
-    h->events = NULL;
-    h->capacity = 0;
-    h->size = 0;
+    ASSERT(heap);
+    heap->events = NULL;
+    heap->capacity = 0;
+    heap->size = 0;
 }
 
-void timers_term(timer_min_heap *h)
+void timers_term(timer_min_heap *heap)
 {
-    ASSERT(h);
-    mem_free(h->events);
+    ASSERT(heap);
+    mem_free(heap->events);
 }
 
-unsigned int timers_timeout(timer_min_heap *h, const struct nanoev_timeval *now)
+unsigned int timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now)
 {
     nanoev_timer *top;
-    struct nanoev_timeval t;
+    struct nanoev_timeval tv;
 
-    if (!h->size)
-        return 0xffffffff;
+    ASSERT(heap && now);
 
-    top = (nanoev_timer*)h->events[0];
-    t = top->timeout;
-    if (time_cmp(&t, now) <= 0)
+    if (!heap->size)
+        return 0xffffffff;  /* INFINITI */
+
+    top = (nanoev_timer*)heap->events[0];
+    tv = top->timeout;
+    if (time_cmp(&tv, now) <= 0)
         return 0;
 
-    time_sub(&t, now);
-    return t.tv_sec * 1000 + t.tv_usec / 1000;
+    time_sub(&tv, now);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;  /* convert to milliseconds */
 }
 
-int timers_process(timer_min_heap *h, const struct nanoev_timeval *now)
+void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now)
 {
     nanoev_timer *top;
 
-    while (h->size) {
-        top = (nanoev_timer*)h->events[0];
+    ASSERT(heap && now);
+
+    while (heap->size) {
+        top = (nanoev_timer*)heap->events[0];
         if (time_cmp(&top->timeout, now) > 0)
             break;
 
         top->callback((nanoev_event*)top);
 
-        min_heap_erase(h, top);
+        min_heap_erase(heap, top);
     }
-
-    return NANOEV_SUCCESS;
 }
 
 /*----------------------------------------------------------------------------*/
 
-static int time_greater(nanoev_timer *t0, nanoev_timer *t1)
+static int __time_greater(nanoev_timer *t0, nanoev_timer *t1)
 {
     int ret_code = time_cmp(&t0->timeout, &t1->timeout);
     return ret_code > 0 ? 1 : 0;
 }
 
-static int min_heap_reserve(timer_min_heap *h, unsigned int capacity)
+static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity)
 {
-    ASSERT(h);
+    ASSERT(heap);
     ASSERT(capacity);
 
-    if (h->capacity < capacity) {
+    if (heap->capacity < capacity) {
         nanoev_event** events_new = (nanoev_event**)mem_realloc(
-            h->events, sizeof(nanoev_event*) * capacity);
+            heap->events, sizeof(nanoev_event*) * capacity);
         if (!events_new)
             return NANOEV_ERROR_OUT_OF_MEMORY;
-        h->events = events_new;
-        h->capacity = capacity;
+        heap->events = events_new;
+        heap->capacity = capacity;
     }
 
     return NANOEV_SUCCESS;
 }
 
-static void min_heap_erase(timer_min_heap *h, nanoev_timer *t)
+static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer)
 {
     nanoev_timer *last;
     unsigned int parent;
 
-    if (t->min_heap_idx != (unsigned int)-1) {
+    if (timer->min_heap_idx != (unsigned int)-1) {
         /* 容量减1 */
-        h->size--;
+        heap->size--;
         
-        /* 假定最后一个节点是在t所在的位置上（覆盖了t），然后调整堆 */
-        last = (nanoev_timer*)h->events[h->size];
-        parent = (t->min_heap_idx - 1) / 2;
-        if (t->min_heap_idx > 0 && time_greater((nanoev_timer*)h->events[parent], last))
-            min_heap_shift_up(h, t->min_heap_idx, last);
+        /* 假定最后一个节点是在timer所在的位置上（覆盖了timer），然后调整堆 */
+        last = (nanoev_timer*)heap->events[heap->size];
+        parent = (timer->min_heap_idx - 1) / 2;
+        if (timer->min_heap_idx > 0 && __time_greater((nanoev_timer*)heap->events[parent], last))
+            min_heap_shift_up(heap, timer->min_heap_idx, last);
         else
-            min_heap_shift_down(h, t->min_heap_idx, last);
+            min_heap_shift_down(heap, timer->min_heap_idx, last);
 
-        /* 清空t在heap中的index */
-        t->min_heap_idx = (unsigned int)-1;
+        /* 清空timer在heap中的index */
+        timer->min_heap_idx = (unsigned int)-1;
     }
 }
 
-static void min_heap_shift_up(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
+static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer)
 {
+    /* 循环处理：若parent的timeout比timer的timeout值要大，则交换两者的位置 */
     unsigned int parent = (hole_index - 1) / 2;
-    while (hole_index && time_greater((nanoev_timer*)h->events[parent], t)) {
-        /* parent的timeout比t的timeout值要大，将parent挪到hole_index */
-        h->events[hole_index] = h->events[parent];
-        ((nanoev_timer*)h->events[hole_index])->min_heap_idx = hole_index;
-        hole_index = parent;
-        parent = (hole_index - 1) / 2;
-    }
-    /* 现在的hole_index就是t应该在的位置 */
-    h->events[hole_index] = (nanoev_event*)t;
-    t->min_heap_idx = hole_index;
-}
-
-static void min_heap_shift_down(timer_min_heap *h, unsigned int hole_index, nanoev_timer *t)
-{
-    unsigned int min_child = 2 * (hole_index + 1);
-    while (min_child <= h->size) {
-        if (min_child == h->size
-            || time_greater((nanoev_timer*)h->events[min_child], (nanoev_timer*)h->events[min_child - 1])
-            ) {
-            min_child--;
-        }
-        if (!time_greater(t, (nanoev_timer*)h->events[min_child])) {
+    while (hole_index) {
+        if (!__time_greater((nanoev_timer*)heap->events[parent], timer)) {
             break;
         }
-        h->events[hole_index] = h->events[min_child];
-        ((nanoev_timer*)h->events[hole_index])->min_heap_idx = min_child;
-        min_child = 2 * (hole_index + 1);
+
+        heap->events[hole_index] = heap->events[parent];
+        ((nanoev_timer*)heap->events[hole_index])->min_heap_idx = hole_index;
+        hole_index = parent;
+
+        parent = (hole_index - 1) / 2;
     }
-    /* 现在的hole_index就是t应该在的位置 */
-    h->events[hole_index] = (nanoev_event*)t;
-    t->min_heap_idx = hole_index;
+
+    /* 现在的hole_index就是timer应该在的位置 */
+    heap->events[hole_index] = (nanoev_event*)timer;
+    timer->min_heap_idx = hole_index;
+}
+
+static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer)
+{
+    unsigned int min_child = 2 * hole_index + 2;  /* 先假设right_child是较小的那个 */
+    while (min_child <= heap->size) {
+        if (min_child == heap->size) {
+            /* 没有right_child，只有left_child */
+            min_child--;
+        } else if (__time_greater((nanoev_timer*)heap->events[min_child], 
+                    (nanoev_timer*)heap->events[min_child - 1])
+                   ) {
+            /* left_child的值比right_child小，让min_child指向left_child */
+            min_child--;
+        }
+
+        if (!__time_greater(timer, (nanoev_timer*)heap->events[min_child])) {
+            break;
+        }
+
+        /* 将timer和min_child位置互换 */
+        heap->events[hole_index] = heap->events[min_child];
+        ((nanoev_timer*)heap->events[hole_index])->min_heap_idx = min_child;
+        hole_index = min_child;
+        
+        min_child = 2 * hole_index + 2;
+    }
+
+    /* 现在的hole_index就是timer应该在的位置 */
+    heap->events[hole_index] = (nanoev_event*)timer;
+    timer->min_heap_idx = hole_index;
 }

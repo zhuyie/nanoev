@@ -56,10 +56,13 @@ void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub)
 {
     unsigned long long usec0 = tv->tv_sec * 1000000 + tv->tv_usec;
     unsigned long long usec1 = sub->tv_sec * 1000000 + sub->tv_usec;
-    ASSERT(usec0 >= usec1);
-    usec0 -= usec1;
-    tv->tv_sec = (unsigned int)(usec0 / 1000000);
-    tv->tv_usec = usec0 % 1000000;
+    if (usec0 >= usec1) {
+        usec0 -= usec1;
+        tv->tv_sec = (unsigned int)(usec0 / 1000000);
+        tv->tv_usec = usec0 % 1000000;
+    } else {
+        ASSERT(0);
+    }
 }
 
 int time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1)
