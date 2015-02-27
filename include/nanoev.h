@@ -189,6 +189,7 @@ typedef void (*nanoev_timer_callback)(
 int nanoev_timer_add(
     nanoev_event *event,
     struct nanoev_timeval after,
+    int repeat,
     nanoev_timer_callback callback
     );
 

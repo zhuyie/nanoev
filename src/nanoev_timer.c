@@ -4,9 +4,11 @@
 
 struct nanoev_timer {
     NANOEV_EVENT_FILEDS
+    struct nanoev_timeval after;
+    int repeat;
+    unsigned int min_heap_idx;
     struct nanoev_timeval timeout;
     nanoev_timer_callback callback;
-    unsigned int min_heap_idx;
 };
 typedef struct nanoev_timer nanoev_timer;
 
@@ -48,6 +50,7 @@ void timer_free(nanoev_event *event)
 int nanoev_timer_add(
     nanoev_event *event,
     struct nanoev_timeval after,
+    int repeat,
     nanoev_timer_callback callback
     )
 {
@@ -60,6 +63,8 @@ int nanoev_timer_add(
     ASSERT(timer->min_heap_idx == (unsigned int)-1);
     ASSERT(callback);
 
+    timer->after = after;
+    timer->repeat = repeat;
     nanoev_loop_now(timer->loop, &timer->timeout);
     time_add(&timer->timeout, &after);
     timer->callback = callback;
@@ -140,9 +145,20 @@ void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now)
         if (time_cmp(&top->timeout, now) > 0)
             break;
 
+        /* Invoke callback */
         top->callback((nanoev_event*)top);
 
+        /* Erase from the heap */
         min_heap_erase(heap, top);
+
+        /* Add back if top is a repeating timer */
+        if (top->repeat) {
+            top->timeout = *now;
+            time_add(&top->timeout, &top->after);
+
+            min_heap_shift_up(heap, heap->size, top);
+            heap->size++;
+        }
     }
 }
 
