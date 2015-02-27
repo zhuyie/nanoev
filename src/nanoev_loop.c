@@ -6,7 +6,7 @@ struct nanoev_loop {
     void *userdata;
     HANDLE iocp;                                  /* IOCP handle */
     int error_code;                               /* last error code */
-    DWORD threadID;                               /* thread(ID) which running the loop */
+    DWORD thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     int outstanding_io_count;
     struct nanoev_timeval now;
@@ -68,8 +68,8 @@ int nanoev_loop_run(nanoev_loop *loop)
     ASSERT(loop->iocp);
 
     /* record the running thread ID */
-    ASSERT(loop->threadID == 0);
-    loop->threadID = GetCurrentThreadId();
+    ASSERT(loop->thread_id == 0);
+    loop->thread_id = GetCurrentThreadId();
 
     while (loop->timers.size || loop->outstanding_io_count) {
         /* update time */
@@ -111,7 +111,7 @@ int nanoev_loop_run(nanoev_loop *loop)
     }
 
     /* clear the running thread ID */
-    loop->threadID = 0;
+    loop->thread_id = 0;
 
     return ret_code;
 }
@@ -151,7 +151,7 @@ int in_loop_thread(nanoev_loop *loop)
 {
     ASSERT(loop);
 
-    if (loop->threadID && GetCurrentThreadId() != loop->threadID)
+    if (loop->thread_id && GetCurrentThreadId() != loop->thread_id)
         return 0;
 
     return 1;
