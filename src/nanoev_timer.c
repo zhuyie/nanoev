@@ -17,7 +17,7 @@ static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer);
 static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 
-#define NANOEV_TIMER_FLAG_INVOKING_CALLBACK  (0x00000001) /* mark for delete */
+#define NANOEV_TIMER_FLAG_INVOKING_CALLBACK  (0x00000001) /* during callback */
 #define NANOEV_TIMER_FLAG_DELETED            (0x80000000) /* mark for delete */
 
 /*----------------------------------------------------------------------------*/
