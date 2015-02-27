@@ -45,23 +45,26 @@ void nanoev_now(struct nanoev_timeval *tv)
 
 void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add)
 {
-    unsigned int microseconds = tv->tv_usec + add->tv_usec;
-    unsigned int seconds = microseconds / 1000000;
-    microseconds %= 1000000;
-    tv->tv_sec += add->tv_sec + seconds;
-    tv->tv_usec = microseconds;
+    tv->tv_sec += add->tv_sec;
+    tv->tv_usec += add->tv_usec;
+    ASSERT(tv->tv_usec < 2000000);
+    if (tv->tv_usec >= 1000000) {
+        tv->tv_sec += 1;
+        tv->tv_usec -= 1000000;
+    }
 }
 
 void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub)
 {
-    unsigned long long usec0 = tv->tv_sec * 1000000 + tv->tv_usec;
-    unsigned long long usec1 = sub->tv_sec * 1000000 + sub->tv_usec;
-    if (usec0 >= usec1) {
-        usec0 -= usec1;
-        tv->tv_sec = (unsigned int)(usec0 / 1000000);
-        tv->tv_usec = usec0 % 1000000;
+    ASSERT(tv->tv_sec >= sub->tv_sec);
+    tv->tv_sec -= sub->tv_sec;
+    if (sub->tv_usec > tv->tv_usec) {
+        ASSERT(tv->tv_sec > 0);
+        tv->tv_sec -= 1;
+        tv->tv_usec = tv->tv_usec + 1000000 - sub->tv_usec;
+        ASSERT(tv->tv_usec < 1000000);
     } else {
-        ASSERT(0);
+        tv->tv_usec -= sub->tv_usec;
     }
 }
 
