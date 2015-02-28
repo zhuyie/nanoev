@@ -95,7 +95,7 @@ int nanoev_loop_run(nanoev_loop *loop)
 
         } else {
             if (loop_break_key == key) {
-                /* someone called kgse_loop_break */
+                /* someone called nanoev_loop_break */
                 break;
             }
             if (WAIT_TIMEOUT != GetLastError()) {
