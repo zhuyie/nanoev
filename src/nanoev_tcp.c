@@ -464,8 +464,9 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
 
     if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
 
-        if (tcp->flags & NANOEV_TCP_FLAG_READING) {
+        if (&tcp->overlapped_read == overlapped) {
             /* a recv operation is completed */
+            ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
             tcp->flags &= ~NANOEV_TCP_FLAG_READING;
             on_read = tcp->on_read;
             tcp->on_read = NULL;
@@ -476,6 +477,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
 
         } else {
             /* a send operation is completed */
+            ASSERT(&tcp->overlapped_write == overlapped);
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_WRITING);
             tcp->flags &= ~NANOEV_TCP_FLAG_WRITING;
             on_write = tcp->on_write;
