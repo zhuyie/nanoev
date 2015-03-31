@@ -203,7 +203,7 @@ static int __time_greater(nanoev_timer *t0, nanoev_timer *t1)
 static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity_required)
 {
     ASSERT(heap);
-    ASSERT(capacity);
+    ASSERT(capacity_required);
 
     if (heap->capacity < capacity_required) {
         unsigned int capacity_new;
