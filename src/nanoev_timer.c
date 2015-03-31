@@ -12,7 +12,7 @@ struct nanoev_timer {
 };
 typedef struct nanoev_timer nanoev_timer;
 
-static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity);
+static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity_required);
 static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer);
 static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
 static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer);
@@ -68,8 +68,10 @@ int nanoev_timer_add(
 
     ASSERT(timer);
     ASSERT(in_loop_thread(timer->loop));
-    ASSERT(timer->min_heap_idx == (unsigned int)-1);
     ASSERT(callback);
+
+    if (timer->min_heap_idx != (unsigned int)-1)
+        return NANOEV_ERROR_FAIL;
 
     timer->after = after;
     timer->repeat = repeat;
@@ -98,7 +100,9 @@ int nanoev_timer_del(
 
     ASSERT(timer);
     ASSERT(in_loop_thread(timer->loop));
-    ASSERT(timer->min_heap_idx != (unsigned int)-1);
+
+    if (timer->min_heap_idx == (unsigned int)-1)
+        return NANOEV_ERROR_FAIL;
 
     heap = get_loop_timers(timer->loop);
     ASSERT(heap);
@@ -183,18 +187,26 @@ static int __time_greater(nanoev_timer *t0, nanoev_timer *t1)
     return ret_code > 0 ? 1 : 0;
 }
 
-static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity)
+static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity_required)
 {
     ASSERT(heap);
     ASSERT(capacity);
 
-    if (heap->capacity < capacity) {
-        nanoev_event** events_new = (nanoev_event**)mem_realloc(
-            heap->events, sizeof(nanoev_event*) * capacity);
+    if (heap->capacity < capacity_required) {
+        unsigned int capacity_new;
+        nanoev_event** events_new;
+
+        capacity_new = heap->capacity;
+        while (capacity_new < capacity_required)
+            capacity_new += 64;
+
+        events_new = (nanoev_event**)mem_realloc(
+            heap->events, sizeof(nanoev_event*) * capacity_new);
         if (!events_new)
             return NANOEV_ERROR_OUT_OF_MEMORY;
+
         heap->events = events_new;
-        heap->capacity = capacity;
+        heap->capacity = capacity_new;
     }
 
     return NANOEV_SUCCESS;
