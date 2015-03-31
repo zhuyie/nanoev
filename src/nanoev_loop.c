@@ -14,6 +14,7 @@ struct nanoev_loop {
 };
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
+static void __update_time(nanoev_loop *loop);
 static const ULONG_PTR loop_break_key = (ULONG_PTR)-1;
 
 /*----------------------------------------------------------------------------*/
@@ -71,9 +72,12 @@ int nanoev_loop_run(nanoev_loop *loop)
     ASSERT(loop->thread_id == 0);
     loop->thread_id = GetCurrentThreadId();
 
+    /* make sure we have a valid time before enter into the while loop */
+    nanoev_now(&loop->now);
+
     while (loop->timers.size || loop->outstanding_io_count) {
         /* update time */
-        nanoev_now(&loop->now);
+        __update_time(loop);
 
         /* process lazy-delete proactor */
         __process_endgame_proactor(loop, 0);
@@ -202,4 +206,23 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
             cur = &((*cur)->next);
         }
     }
+}
+
+static void __update_time(nanoev_loop *loop)
+{
+    struct nanoev_timeval tv, off;
+
+    nanoev_now(&tv);
+
+    /* timer内部记录的timeout是基于它所设置那个时刻的系统时间来计算的。
+       如果用户修改了系统时间，则timer的触发将不正确。
+       我们能够检测出系统时间回退了，但若系统时间向前调了，暂时没法子处理。
+     */
+    if (time_cmp(&tv, &loop->now) < 0) {
+        off = loop->now;
+        time_sub(&off, &tv);
+        timers_adjust_backward(&loop->timers, &off);
+    }
+
+    loop->now = tv;
 }

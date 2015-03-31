@@ -179,6 +179,19 @@ void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now)
     }
 }
 
+void timers_adjust_backward(timer_min_heap *heap, const struct nanoev_timeval *off)
+{
+    unsigned int i;
+    nanoev_timer *timer;
+
+    ASSERT(heap && off);
+
+    for (i = 0; i < heap->size; ++i) {
+        timer = (nanoev_timer*)heap->events[i];
+        time_sub(&timer->timeout, off);
+    }
+}
+
 /*----------------------------------------------------------------------------*/
 
 static int __time_greater(nanoev_timer *t0, nanoev_timer *t1)
