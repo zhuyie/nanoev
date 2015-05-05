@@ -27,6 +27,40 @@ typedef struct {
 
 const nanoev_winsock_ext* get_winsock_ext();
 
+#if _WIN32_WINNT < 0x0600
+
+#define FILE_SKIP_COMPLETION_PORT_ON_SUCCESS 0x1
+#define FILE_SKIP_SET_EVENT_ON_HANDLE        0x2
+
+typedef struct _OVERLAPPED_ENTRY {
+    ULONG_PTR lpCompletionKey;
+    LPOVERLAPPED lpOverlapped;
+    ULONG_PTR Internal;
+    DWORD dwNumberOfBytesTransferred;
+} OVERLAPPED_ENTRY, *LPOVERLAPPED_ENTRY;
+
+#endif
+
+typedef BOOL (WINAPI *PFN_GetQueuedCompletionStatusEx)(
+    HANDLE CompletionPort,
+    LPOVERLAPPED_ENTRY lpCompletionPortEntries,
+    ULONG ulCount,
+    PULONG ulNumEntriesRemoved,
+    DWORD dwMilliseconds,
+    BOOL fAlertable
+    );
+typedef BOOL (WINAPI *PFN_SetFileCompletionNotificationModes)(
+    HANDLE FileHandle,
+    UCHAR Flags
+    );
+
+typedef struct {
+    PFN_GetQueuedCompletionStatusEx pGetQueuedCompletionStatusEx;
+    PFN_SetFileCompletionNotificationModes pSetFileCompletionNotificationModes;
+} nanoev_win32_ext_fns;
+
+const nanoev_win32_ext_fns* get_win32_ext_fns();
+
 /*----------------------------------------------------------------------------*/
 
 #define NANOEV_EVENT_FILEDS                                  \

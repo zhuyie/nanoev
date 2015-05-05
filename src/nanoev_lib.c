@@ -3,7 +3,9 @@
 /*----------------------------------------------------------------------------*/
 
 static nanoev_winsock_ext winsock_ext = { 0 };
+static nanoev_win32_ext_fns win32_ext_fns = { 0 };
 static int init_winsock_ext();
+static void init_win32_ext_fns();
 
 int nanoev_init()
 {
@@ -19,6 +21,9 @@ int nanoev_init()
     /* init Winsock extension function table */
     if (init_winsock_ext())
         goto ERROR_EXIT;
+
+    /* init Win32 extension function table */
+    init_win32_ext_fns();
 
     return NANOEV_SUCCESS;
 
@@ -36,6 +41,11 @@ void nanoev_term()
 const nanoev_winsock_ext* get_winsock_ext()
 {
     return &winsock_ext;
+}
+
+const nanoev_win32_ext_fns* get_win32_ext_fns()
+{
+    return &win32_ext_fns;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -65,4 +75,16 @@ static int init_winsock_ext()
         return -1;
 
     return 0;
+}
+
+static void init_win32_ext_fns()
+{
+    HMODULE hDLL = GetModuleHandleW(L"kernel32.dll");
+    if (!hDLL)
+        return;
+
+    win32_ext_fns.pGetQueuedCompletionStatusEx = 
+        (PFN_GetQueuedCompletionStatusEx)GetProcAddress(hDLL, "GetQueuedCompletionStatusEx");
+    win32_ext_fns.pSetFileCompletionNotificationModes = 
+        (PFN_SetFileCompletionNotificationModes)GetProcAddress(hDLL, "SetFileCompletionNotificationModes");
 }

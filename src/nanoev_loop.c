@@ -60,9 +60,9 @@ int nanoev_loop_run(nanoev_loop *loop)
 {
     unsigned int timeout;
     nanoev_proactor *proactor;
-    DWORD bytes;
-    ULONG_PTR key;
-    OVERLAPPED *overlapped;
+    OVERLAPPED_ENTRY overlappeds[128];
+    BOOL success;
+    DWORD i, count;
     int ret_code = NANOEV_SUCCESS;
 
     ASSERT(loop);
@@ -89,31 +89,52 @@ int nanoev_loop_run(nanoev_loop *loop)
         timeout = timers_timeout(&loop->timers, &loop->now);
 
         /* try to dequeue a completion package */
-        overlapped = NULL;
-        GetQueuedCompletionStatus(loop->iocp, &bytes, &key, &overlapped, timeout);
-        if (overlapped) {
-            /* process the completion packet */
-            ASSERT(key);
-            proactor = (nanoev_proactor*)key;
-            proactor->callback(proactor, overlapped);
-
-            ASSERT(loop->outstanding_io_count >= 0);
-            loop->outstanding_io_count--;
-
+        if (get_win32_ext_fns()->pGetQueuedCompletionStatusEx) {
+            success = get_win32_ext_fns()->pGetQueuedCompletionStatusEx(
+                loop->iocp,
+                overlappeds,
+                1,
+                &count,
+                timeout,
+                FALSE
+                );
         } else {
-            if (loop_break_key == key) {
-                /* someone called nanoev_loop_break */
-                break;
+            count = 1;
+            success = GetQueuedCompletionStatus(
+                loop->iocp, 
+                &(overlappeds[0].dwNumberOfBytesTransferred), 
+                &(overlappeds[0].lpCompletionKey), 
+                &(overlappeds[0].lpOverlapped), 
+                timeout
+                );
+        }
+        if (success) {
+            for (i = 0; i < count; ++i) {
+                if (overlappeds[i].lpOverlapped) {
+                    /* process the completion packet */
+                    ASSERT(overlappeds[i].lpCompletionKey);
+                    proactor = (nanoev_proactor*)overlappeds[i].lpCompletionKey;
+                    proactor->callback(proactor, overlappeds[i].lpOverlapped);
+
+                    ASSERT(loop->outstanding_io_count >= 0);
+                    loop->outstanding_io_count--;
+
+                } else {
+                    /* someone called nanoev_loop_break */
+                    ASSERT(loop_break_key == overlappeds[i].lpCompletionKey);
+                    goto ON_LOOP_BREAK;
+                }
             }
-            if (WAIT_TIMEOUT != GetLastError()) {
-                /* unexpected error */
-                loop->error_code = GetLastError();
-                ret_code = NANOEV_ERROR_FAIL;
-                break;
-            }
+
+        } else if (WAIT_TIMEOUT != GetLastError()) {
+            /* unexpected error */
+            loop->error_code = GetLastError();
+            ret_code = NANOEV_ERROR_FAIL;
+            break;
         }
     }
 
+ON_LOOP_BREAK:
     /* clear the running thread ID */
     loop->thread_id = 0;
 
