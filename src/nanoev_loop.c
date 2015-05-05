@@ -93,7 +93,7 @@ int nanoev_loop_run(nanoev_loop *loop)
             success = get_win32_ext_fns()->pGetQueuedCompletionStatusEx(
                 loop->iocp,
                 overlappeds,
-                1,
+                sizeof(overlappeds) / sizeof(overlappeds[0]),
                 &count,
                 timeout,
                 FALSE
