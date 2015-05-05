@@ -78,6 +78,9 @@ int nanoev_loop_run(nanoev_loop *loop)
     while (loop->timers.size || loop->outstanding_io_count) {
         /* update time */
         __update_time(loop);
+        
+        /* process timer */
+        timers_process(&loop->timers, &loop->now);
 
         /* process lazy-delete proactor */
         __process_endgame_proactor(loop, 0);
@@ -109,9 +112,6 @@ int nanoev_loop_run(nanoev_loop *loop)
                 break;
             }
         }
-
-        /* process timer */
-        timers_process(&loop->timers, &loop->now);
     }
 
     /* clear the running thread ID */
