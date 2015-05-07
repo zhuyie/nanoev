@@ -18,6 +18,10 @@ nanoev_event* nanoev_event_new(
         event = tcp_new(loop, userdata);
         break;
 
+    case nanoev_event_udp:
+        event = udp_new(loop, userdata);
+        break;
+
     case nanoev_event_async:
         event = async_new(loop, userdata);
         break;
@@ -44,6 +48,10 @@ void nanoev_event_free(
     switch (event->type) {
     case nanoev_event_tcp:
         tcp_free(event);
+        break;
+
+    case nanoev_event_udp:
+        udp_free(event);
         break;
 
     case nanoev_event_async:

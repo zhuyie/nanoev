@@ -212,3 +212,42 @@ int ntstatus_to_winsock_error(long status)
         }
     }
 }
+
+/*----------------------------------------------------------------------------*/
+
+void nanoev_addr_init(
+    struct nanoev_addr *addr, 
+    const char *ip, 
+    unsigned short port
+    )
+{
+    ASSERT(addr && ip && port);
+    addr->ip = inet_addr(ip);
+    addr->port = htons(port);
+}
+
+void nanoev_addr_get_ip(
+    const struct nanoev_addr *addr, 
+    char ip[16]
+    )
+{
+    const char *s;
+
+    ASSERT(addr && ip);
+
+    s = inet_ntoa(*(struct in_addr*)&addr->ip);
+    if (s) {
+        strcpy(ip, s);
+    } else {
+        ip[0] = '\0';
+    }
+}
+
+void nanoev_addr_get_port(
+    const struct nanoev_addr *addr, 
+    unsigned short *port
+    )
+{
+    ASSERT(addr && port);
+    *port = ntohs(addr->port);
+}

@@ -53,6 +53,7 @@ typedef struct nanoev_event nanoev_event;
 typedef enum {
     nanoev_event_unknown = 0,
     nanoev_event_tcp,
+    nanoev_event_udp,
     nanoev_event_async,
     nanoev_event_timer,
 } nanoev_event_type;
@@ -77,6 +78,29 @@ nanoev_loop* nanoev_event_loop(
 
 void* nanoev_event_userdata(
     nanoev_event *event
+    );
+
+/*----------------------------------------------------------------------------*/
+
+struct nanoev_addr {
+    unsigned int ip;
+    unsigned short port;
+};
+
+void nanoev_addr_init(
+    struct nanoev_addr *addr, 
+    const char *ip, 
+    unsigned short port
+    );
+
+void nanoev_addr_get_ip(
+    const struct nanoev_addr *addr, 
+    char ip[16]
+    );
+
+void nanoev_addr_get_port(
+    const struct nanoev_addr *addr, 
+    unsigned short *port
     );
 
 /*----------------------------------------------------------------------------*/
@@ -150,6 +174,42 @@ int nanoev_tcp_addr(
 
 int nanoev_tcp_error(
     nanoev_event *event
+    );
+
+/*----------------------------------------------------------------------------*/
+
+typedef void (*nanoev_udp_on_read)(
+    nanoev_event *udp,
+    int status,
+    void *buf,
+    unsigned int bytes,
+    const struct nanoev_addr *from_addr
+    );
+typedef void (*nanoev_udp_on_write)(
+    nanoev_event *udp,
+    int status,
+    void *buf,
+    unsigned int bytes
+    );
+
+int nanoev_udp_read(
+    nanoev_event *event, 
+    const void *buf, 
+    unsigned int len, 
+    nanoev_udp_on_read callback
+    );
+
+int nanoev_udp_write(
+    nanoev_event *event, 
+    const void *buf, 
+    unsigned int len, 
+    const struct nanoev_addr *to_addr,
+    nanoev_udp_on_write callback
+    );
+
+int nanoev_udp_bind(
+    nanoev_event *event,
+    const struct nanoev_addr *addr
     );
 
 /*----------------------------------------------------------------------------*/

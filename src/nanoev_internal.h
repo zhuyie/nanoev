@@ -3,6 +3,7 @@
 
 #include "nanoev.h"
 
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdlib.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -75,6 +76,9 @@ struct nanoev_event {
 
 nanoev_event* tcp_new(nanoev_loop *loop, void *userdata);
 void tcp_free(nanoev_event *event);
+
+nanoev_event* udp_new(nanoev_loop *loop, void *userdata);
+void udp_free(nanoev_event *event);
 
 nanoev_event* async_new(nanoev_loop *loop, void *userdata);
 void async_free(nanoev_event *event);

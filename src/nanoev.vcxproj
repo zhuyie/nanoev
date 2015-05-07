@@ -22,6 +22,7 @@
     <ClCompile Include="nanoev_misc.c" />
     <ClCompile Include="nanoev_tcp.c" />
     <ClCompile Include="nanoev_timer.c" />
+    <ClCompile Include="nanoev_udp.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{6A273931-3EE1-4DE4-98C7-E5547B79E29B}</ProjectGuid>
