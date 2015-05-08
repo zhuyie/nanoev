@@ -78,8 +78,7 @@ void tcp_free(nanoev_event *event)
 
 int nanoev_tcp_connect(
     nanoev_event *event, 
-    const char *ip, 
-    unsigned short port, 
+    const struct nanoev_addr *server_addr,
     nanoev_tcp_on_connect callback
     )
 {
@@ -93,7 +92,7 @@ int nanoev_tcp_connect(
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(in_loop_thread(tcp->loop));
 
-    if (!ip || !port || !callback)
+    if (!server_addr || !callback)
         return NANOEV_ERROR_INVALID_ARG;
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
@@ -130,8 +129,8 @@ int nanoev_tcp_connect(
 
     /* Call ConnectEx */
     remote_addr.sin_family = AF_INET;
-    remote_addr.sin_addr.s_addr = inet_addr(ip);
-    remote_addr.sin_port = htons(port);
+    remote_addr.sin_addr.s_addr = server_addr->ip;
+    remote_addr.sin_port = server_addr->port;
     if (!get_winsock_ext()->ConnectEx(tcp->sock, (const struct sockaddr*)&remote_addr, 
             sizeof(remote_addr), NULL, 0, NULL, &tcp->overlapped_write)
          && ERROR_IO_PENDING != WSAGetLastError()
@@ -154,21 +153,20 @@ ERROR_EXIT:
 
 int nanoev_tcp_listen(
     nanoev_event *event, 
-    const char *ip, 
-    unsigned short port, 
+    const struct nanoev_addr *local_addr,
     int backlog
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
     unsigned long is_nonblocking = 1;
-    struct sockaddr_in local_addr;
+    struct sockaddr_in addr;
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(in_loop_thread(tcp->loop));
 
-    if (!port)
+    if (!local_addr)
         return NANOEV_ERROR_INVALID_ARG;
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
@@ -195,10 +193,10 @@ int nanoev_tcp_listen(
         goto ERROR_EXIT;
 
     /* bind */
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = (ip == NULL) ? htonl(INADDR_ANY) : inet_addr(ip);
-    local_addr.sin_port = htons(port);
-    if (0 != bind(tcp->sock, (const struct sockaddr*)&local_addr, sizeof(local_addr))) {
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = local_addr->ip;
+    addr.sin_port = local_addr->port;
+    if (0 != bind(tcp->sock, (const struct sockaddr*)&addr, sizeof(addr))) {
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
@@ -376,21 +374,19 @@ int nanoev_tcp_read(
 int nanoev_tcp_addr(
     nanoev_event *event, 
     int local, 
-    char ip[16], 
-    unsigned short *port
+    struct nanoev_addr *addr
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
-    struct sockaddr_in addr;
+    struct sockaddr_in sock_addr;
     int len;
-    char *ip_str;
     int ret_code;
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
     ASSERT(in_loop_thread(tcp->loop));
-    ASSERT(ip && port);
+    ASSERT(addr);
 
     if (tcp->sock == INVALID_SOCKET
         || tcp->flags & NANOEV_TCP_FLAG_ERROR
@@ -401,9 +397,9 @@ int nanoev_tcp_addr(
 
     len = sizeof(struct sockaddr_in);
     if (local) {
-        ret_code = getsockname(tcp->sock, (struct sockaddr*)&addr, &len);
+        ret_code = getsockname(tcp->sock, (struct sockaddr*)&sock_addr, &len);
     } else {
-        ret_code = getpeername(tcp->sock, (struct sockaddr*)&addr, &len);
+        ret_code = getpeername(tcp->sock, (struct sockaddr*)&sock_addr, &len);
     }
     if (0 != ret_code) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -411,13 +407,8 @@ int nanoev_tcp_addr(
         return NANOEV_ERROR_FAIL;
     }
 
-    ip_str = inet_ntoa(addr.sin_addr);
-    if (ip_str)
-        strcpy_s(ip, 16, ip_str);
-    else
-        ip[0] = '\0';
-    *port = ntohs(addr.sin_port);
-
+    addr->ip = sock_addr.sin_addr.s_addr;
+    addr->port = sock_addr.sin_port;
     return NANOEV_SUCCESS;
 }
 

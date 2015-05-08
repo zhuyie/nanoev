@@ -91,6 +91,7 @@ int main(int argc, char* argv[])
     unsigned short port;
     nanoev_loop *loop;
     nanoev_event *tcp;
+    struct nanoev_addr local_addr;
     nanoev_event *async;
 
     ret_code = nanoev_init();
@@ -108,7 +109,8 @@ int main(int argc, char* argv[])
 
     ip = "0.0.0.0";
     port = 4000;
-    ret_code = nanoev_tcp_listen(tcp, ip, port, 5);
+    nanoev_addr_init(&local_addr, ip, port);
+    ret_code = nanoev_tcp_listen(tcp, &local_addr, 5);
     ASSERT(ret_code == NANOEV_SUCCESS);
     ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -213,6 +215,7 @@ static void on_accept(
     nanoev_event *tcp_new
     )
 {
+    struct nanoev_addr addr;
     char ip[16];
     unsigned short port;
     client *c;
@@ -230,11 +233,13 @@ static void on_accept(
 
     c->tcp = tcp_new;
 
-    ret_code = nanoev_tcp_addr(tcp_new, 0, ip, &port);
+    ret_code = nanoev_tcp_addr(tcp_new, 0, &addr);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_addr failed, code = %u\n", ret_code);
         goto ON_ACCEPT_ERROR;
     }
+    nanoev_addr_get_ip(&addr, ip);
+    nanoev_addr_get_port(&addr, &port);
     printf("Client %s:%d connected\n", ip, (int)port);
 
     /* 分配初始in_buf，发起一个读操作 */

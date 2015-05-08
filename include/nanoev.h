@@ -133,15 +133,13 @@ typedef void (*nanoev_tcp_on_read)(
 
 int nanoev_tcp_connect(
     nanoev_event *event, 
-    const char *ip, 
-    unsigned short port, 
+    const struct nanoev_addr *server_addr,
     nanoev_tcp_on_connect callback
     );
 
 int nanoev_tcp_listen(
     nanoev_event *event, 
-    const char *ip,
-    unsigned short port,
+    const struct nanoev_addr *local_addr,
     int backlog
     );
 
@@ -168,8 +166,7 @@ int nanoev_tcp_read(
 int nanoev_tcp_addr(
     nanoev_event *event, 
     int local,
-    char ip[16],
-    unsigned short *port
+    struct nanoev_addr *addr
     );
 
 int nanoev_tcp_error(
@@ -210,6 +207,10 @@ int nanoev_udp_write(
 int nanoev_udp_bind(
     nanoev_event *event,
     const struct nanoev_addr *addr
+    );
+
+int nanoev_udp_error(
+    nanoev_event *event
     );
 
 /*----------------------------------------------------------------------------*/

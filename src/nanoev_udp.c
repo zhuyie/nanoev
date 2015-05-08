@@ -212,6 +212,18 @@ int nanoev_udp_bind(
     return NANOEV_SUCCESS;
 }
 
+int nanoev_udp_error(nanoev_event *event)
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
+    ASSERT(in_loop_thread(udp->loop));
+
+    return udp->error_code;
+}
+
 /*----------------------------------------------------------------------------*/
 
 void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)

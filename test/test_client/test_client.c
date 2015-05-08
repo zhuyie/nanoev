@@ -60,6 +60,7 @@ int main(int argc, char* argv[])
     int ret_code;
     nanoev_loop *loop;
     nanoev_event *tcp;
+    struct nanoev_addr server_addr;
     client *c;
 
     ret_code = nanoev_init();
@@ -73,7 +74,8 @@ int main(int argc, char* argv[])
 
     tcp = nanoev_event_new(nanoev_event_tcp, loop, c);
     ASSERT(tcp);
-    ret_code = nanoev_tcp_connect(tcp, "127.0.0.1", 4000, on_connect);
+    nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
+    ret_code = nanoev_tcp_connect(tcp, &server_addr, on_connect);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
     ret_code = nanoev_loop_run(loop);
