@@ -11,6 +11,7 @@ struct nanoev_udp {
     WSABUF buf_read;
     WSABUF buf_write;
     struct sockaddr_in from_addr;
+    int from_addr_len;
     /* callback functions */
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read  on_read;
@@ -99,7 +100,6 @@ int nanoev_udp_read(
 {
     nanoev_udp *udp = (nanoev_udp*)event;
     DWORD flags = 0;
-    int from_len;
 
     ASSERT(udp);
     ASSERT(udp->type == nanoev_event_udp);
@@ -117,9 +117,9 @@ int nanoev_udp_read(
     udp->buf_read.buf = (char*)buf;
     udp->buf_read.len = len;
     memset(&udp->overlapped_read, 0, sizeof(udp->overlapped_read));
-    from_len = sizeof(udp->from_addr);
+    udp->from_addr_len = sizeof(udp->from_addr);
     if (0 != WSARecvFrom(udp->sock, &udp->buf_read, 1, NULL, &flags,
-        (struct sockaddr*)&udp->from_addr, &from_len, (OVERLAPPED*)&udp->overlapped_read, NULL)
+        (struct sockaddr*)&udp->from_addr, &udp->from_addr_len, &udp->overlapped_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
@@ -166,7 +166,7 @@ int nanoev_udp_write(
     udp->buf_write.len = len;
     memset(&udp->overlapped_write, 0, sizeof(udp->overlapped_write));
     if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
-        (struct sockaddr*)&addr, sizeof(addr), (OVERLAPPED*)&udp->overlapped_write, NULL)
+        (struct sockaddr*)&addr, sizeof(addr), &udp->overlapped_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
