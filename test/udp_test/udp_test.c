@@ -5,11 +5,20 @@
 #include <assert.h>
 #define ASSERT assert
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 struct nanoev_addr local_addr;
-struct nanoev_addr to_addr;
+struct nanoev_addr server_addr;
 char read_buf[100];
 int times = 0;
-const char *msg = "ABCD\n";
+int max_times = 1000000;
+const char *msg = "ABCD";
+unsigned int msg_len = 4;
+int read_success_count = 0;
+int read_fail_count = 0;
+int write_success_count = 0;
+int write_fail_count = 0;
 
 void on_read(
     nanoev_event *udp,
@@ -19,7 +28,18 @@ void on_read(
     const struct nanoev_addr *from_addr
     )
 {
-    printf("on_read status=%d bytes=%u\n", status, bytes);
+    int ret_code;
+
+    if (!status)
+        ++read_success_count;
+    else
+        ++read_fail_count;
+
+    //printf("on_read status=%d bytes=%u data=%s\n", status, bytes, buf);
+
+    // 继续读下一个包
+    ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
+    ASSERT(ret_code == NANOEV_SUCCESS);
 }
 
 void on_write(
@@ -29,12 +49,19 @@ void on_write(
     unsigned int bytes
     )
 {
-    ++times;
-    printf("on_write status=%d bytes=%u\n", status, bytes);
+    if (!status)
+        ++write_success_count;
+    else
+        ++write_fail_count;
+
+    //printf("on_write status=%d bytes=%u\n", status, bytes);
     
-    if (times < 5) {
-        nanoev_udp_write(udp, msg, (unsigned int)strlen(msg), &to_addr, on_write);
-        nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
+    ++times;
+    if (times < max_times) {
+        int ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
+        ASSERT(ret_code == NANOEV_SUCCESS);
+    } else {
+        nanoev_loop_break(nanoev_event_loop(udp));
     }
 }
 
@@ -43,6 +70,7 @@ int main(int argc, char* argv[])
     int ret_code;
     nanoev_loop *loop;
     nanoev_event *udp;
+    DWORD dwTickStart, dwTime;
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -52,18 +80,30 @@ int main(int argc, char* argv[])
     udp = nanoev_event_new(nanoev_event_udp, loop, NULL);
     ASSERT(udp);
 
+    // bind
     nanoev_addr_init(&local_addr, "127.0.0.1", 4000);
     ret_code = nanoev_udp_bind(udp, &local_addr);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
+    dwTickStart = GetTickCount();
+
+    // 开始读
     ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    nanoev_addr_init(&to_addr, "127.0.0.1", 4000);
-    ret_code = nanoev_udp_write(udp, msg, (unsigned int)strlen(msg), &to_addr, on_write);
+    // 写出第一个包
+    nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
+    ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
     ASSERT(ret_code == NANOEV_SUCCESS);
-    
+
+    // 进入loop
     nanoev_loop_run(loop);
+
+    dwTime = GetTickCount() - dwTickStart;
+    printf("time = %u ms\n", dwTime);
+
+    printf("read  success=%d fail=%d\n", read_success_count, read_fail_count);
+    printf("write success=%d fail=%d\n", write_success_count, write_fail_count);
 
     nanoev_event_free(udp);
 
