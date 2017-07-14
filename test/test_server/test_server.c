@@ -189,7 +189,7 @@ static int get_remain_size(client *c)
 
 static int write_to_buf(client *c, const char *msg)
 {
-    unsigned int len = strlen(msg) + 1;
+    unsigned int len = (unsigned int)strlen(msg) + 1;
 
     unsigned int required_cb = sizeof(unsigned int) + len;
     if (c->out_buf_capacity < required_cb) {

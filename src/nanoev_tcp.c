@@ -445,8 +445,8 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
        Internal : This member, which specifies a system-dependent status
        InternalHigh : This member, which specifies the length of the data transferred
      */
-    status = ntstatus_to_winsock_error(overlapped->Internal);
-    bytes = overlapped->InternalHigh;
+    status = ntstatus_to_winsock_error((long)overlapped->Internal);
+    bytes = (unsigned int)overlapped->InternalHigh;
 
     if (0 != status) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
