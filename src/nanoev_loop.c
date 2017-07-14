@@ -221,7 +221,7 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
     while (*cur) {
         if (enforcing || HAS_NO_OUTSTANDING_IO(*cur)) {
             next = (*cur)->next;
-            free(*cur);
+            mem_free(*cur);
             *cur = next;
         } else {
             cur = &((*cur)->next);
