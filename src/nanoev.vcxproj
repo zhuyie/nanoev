@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="nanoev.h" />
+    <ClInclude Include="nanoev.hpp" />
     <ClInclude Include="nanoev_internal.h" />
   </ItemGroup>
   <ItemGroup>
@@ -111,6 +112,7 @@
     <PostBuildEvent>
       <Command>if not exist ..\include md ..\include
 copy /y nanoev.h ..\include\nanoev.h
+copy /y nanoev.hpp ..\include\nanoev.hpp
 if not exist ..\lib md ..\lib
 if not exist ..\lib\$(Platform) md ..\lib\$(Platform)
 if not exist ..\lib\$(Platform)\$(Configuration) md ..\lib\$(Platform)\$(Configuration)
@@ -132,6 +134,7 @@ copy /y $(OutDir)$(TargetFileName) ..\\lib\$(Platform)\$(Configuration)\$(Target
     <PostBuildEvent>
       <Command>if not exist ..\include md ..\include
 copy /y nanoev.h ..\include\nanoev.h
+copy /y nanoev.hpp ..\include\nanoev.hpp
 if not exist ..\lib md ..\lib
 if not exist ..\lib\$(Platform) md ..\lib\$(Platform)
 if not exist ..\lib\$(Platform)\$(Configuration) md ..\lib\$(Platform)\$(Configuration)
@@ -157,6 +160,7 @@ copy /y $(OutDir)$(TargetFileName) ..\\lib\$(Platform)\$(Configuration)\$(Target
     <PostBuildEvent>
       <Command>if not exist ..\include md ..\include
 copy /y nanoev.h ..\include\nanoev.h
+copy /y nanoev.hpp ..\include\nanoev.hpp
 if not exist ..\lib md ..\lib
 if not exist ..\lib\$(Platform) md ..\lib\$(Platform)
 if not exist ..\lib\$(Platform)\$(Configuration) md ..\lib\$(Platform)\$(Configuration)
@@ -182,6 +186,7 @@ copy /y $(OutDir)$(TargetFileName) ..\\lib\$(Platform)\$(Configuration)\$(Target
     <PostBuildEvent>
       <Command>if not exist ..\include md ..\include
 copy /y nanoev.h ..\include\nanoev.h
+copy /y nanoev.hpp ..\include\nanoev.hpp
 if not exist ..\lib md ..\lib
 if not exist ..\lib\$(Platform) md ..\lib\$(Platform)
 if not exist ..\lib\$(Platform)\$(Configuration) md ..\lib\$(Platform)\$(Configuration)
