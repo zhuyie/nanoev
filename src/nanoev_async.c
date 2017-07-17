@@ -4,9 +4,9 @@
 
 struct nanoev_async {
     NANOEV_PROACTOR_FILEDS
-    int async_sent;
     OVERLAPPED overlapped;
     nanoev_async_callback on_async;
+    volatile long async_sent;
 };
 typedef struct nanoev_async nanoev_async;
 
@@ -66,7 +66,7 @@ void nanoev_async_send(nanoev_event *event)
     ASSERT(async);
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
 
-    if (0 == InterlockedCompareExchange((long volatile *)&(async->async_sent), 1, 0)) {
+    if (0 == InterlockedCompareExchange(&(async->async_sent), 1, 0)) {
         post_fake_io(async->loop, 0, (ULONG_PTR)async, &async->overlapped);
     }
 }
@@ -79,7 +79,7 @@ int nanoev_async_pending(nanoev_event *event)
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
 
     // return async->async_sent;
-    return InterlockedCompareExchange((long volatile *)&(async->async_sent), 0, 0);
+    return InterlockedCompareExchange(&(async->async_sent), 0, 0);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -89,7 +89,7 @@ void __async_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlappe
     nanoev_async *async = (nanoev_async*)proactor;
 
     // async->async_sent = 0;
-    InterlockedCompareExchange((long volatile *)&(async->async_sent), 0, 1);
+    InterlockedCompareExchange(&(async->async_sent), 0, 1);
 
     if (!(async->flags & NANOEV_ASYNC_FLAG_DELETED)) {
         async->on_async((nanoev_event*)async);
