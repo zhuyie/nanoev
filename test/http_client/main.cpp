@@ -2,23 +2,18 @@
 //
 
 #include "stdafx.h"
-#include "nanoev.hpp"
+#include "event_thread.h"
 
 int main(int argc, char* argv[])
 {
-    int ret_code;
-    nanoev_loop *loop;
+    EventThread eventThread;
 
-    ret_code = nanoev_init();
-    ASSERT(ret_code == NANOEV_SUCCESS);
+    eventThread.start();
 
-    loop = nanoev_loop_new(NULL);
-    ASSERT(loop);
+    Sleep(1000 * 30);
 
-    nanoev_loop_free(loop);
-    
-    nanoev_term();
+    eventThread.stop();
 
-	return 0;
+    return 0;
 }
 
