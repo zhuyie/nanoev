@@ -80,6 +80,11 @@ void* nanoev_event_userdata(
     nanoev_event *event
     );
 
+void nanoev_event_set_userdata(
+    nanoev_event *event,
+    void *userdata
+    );
+
 /*----------------------------------------------------------------------------*/
 
 struct nanoev_addr {

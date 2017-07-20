@@ -91,4 +91,13 @@ void* nanoev_event_userdata(
     return event->userdata;
 }
 
+void nanoev_event_set_userdata(
+    nanoev_event *event,
+    void *userdata
+    )
+{
+    ASSERT(event);
+    event->userdata = userdata;
+}
+
 /*----------------------------------------------------------------------------*/
