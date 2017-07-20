@@ -155,6 +155,13 @@ bool HttpClient::__parseURL(const char *URL)
     if (http_parser_parse_url(m_URL.c_str(), m_URL.size(), 0, &m_parsedURL) != 0)
         return false;
 
+    if (m_parsedURL.field_set & (1 << UF_SCHEMA))
+    {
+        std::string schema(m_URL.c_str() + m_parsedURL.field_data[UF_SCHEMA].off, m_parsedURL.field_data[UF_SCHEMA].len);
+        if (schema != "http")
+            return false;
+    }
+
     if ((m_parsedURL.field_set & (1 << UF_HOST)) == 0)
         return false;
     m_host.assign(m_URL.c_str() + m_parsedURL.field_data[UF_HOST].off, m_parsedURL.field_data[UF_HOST].len);
