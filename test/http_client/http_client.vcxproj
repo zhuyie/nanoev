@@ -181,12 +181,24 @@ copy /y $(OutDir)$(TargetFileName) ..\..\bin\$(Platform)\$(Configuration)\$(Targ
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="conn_pool.h" />
     <ClInclude Include="event_thread.h" />
+    <ClInclude Include="handler.h" />
+    <ClInclude Include="http_client.h" />
+    <ClInclude Include="http_parser\http_parser.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="conn_pool.cpp" />
     <ClCompile Include="event_thread.cpp" />
+    <ClCompile Include="http_client.cpp" />
+    <ClCompile Include="http_parser\http_parser.c">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
