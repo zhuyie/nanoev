@@ -12,6 +12,8 @@ HttpClient::HttpClient()
     m_recvBuf = 0;
 
     m_thread = NULL;
+    m_connPool = NULL;
+    m_rateLimiter = NULL;
     m_handler = NULL;
 
     m_stage = invalid;
@@ -37,6 +39,7 @@ bool HttpClient::Init(
     unsigned int recvBufSize, 
     EventThread *thread, 
     ConnectionPool *connPool,
+    RateLimiter *rateLimiter,
     HttpResponseHandler *handler
     )
 {
@@ -55,6 +58,7 @@ bool HttpClient::Init(
 
     m_thread = thread;
     m_connPool = connPool;
+    m_rateLimiter = rateLimiter;
     m_handler = handler;
 
     m_stage = init;
@@ -276,12 +280,21 @@ void HttpClient::__reset()
 
     m_conn = NULL;
     m_isNewConn = false;
+
+    m_rateTimer = NULL;
+    m_rateTokens = 0;
 }
 
 //------------------------------------------------------------------------------
 
 void HttpClient::__onDone(bool isError)
 {
+    if (m_rateTimer)
+    {
+        nanoev_event_free(m_rateTimer);
+        m_rateTimer = NULL;
+    }
+
     if (isError)
     {
         nanoev_event_free(m_conn);
@@ -306,6 +319,11 @@ void HttpClient::__onDone(bool isError)
 void HttpClient::__start(nanoev_loop *loop, bool useConnPool)
 {
     assert(m_conn == NULL);
+
+    if (m_rateLimiter != NULL)
+    {
+        m_rateTimer = nanoev_event_new(nanoev_event_timer, loop, this);
+    }
 
     if (useConnPool)
     {
@@ -410,7 +428,11 @@ void HttpClient::__onWrite(int status, void *buf, unsigned int bytes)
     else
     {
         // 开始接收
-        int res = nanoev_tcp_read(m_conn, m_recvBuf, m_recvBufSize, __onRead);
+        unsigned int toRecv = __prepareReadTokens();
+        if (!toRecv)
+            return;
+
+        int res = nanoev_tcp_read(m_conn, m_recvBuf, toRecv, __onRead);
         if (res != NANOEV_SUCCESS)
         {
             __onDone(true);
@@ -434,11 +456,26 @@ void HttpClient::__onRead(int status, void *buf, unsigned int bytes)
         return;
     }
 
+    __consumeReadTokens(bytes);
+
     if (!m_isMessageComplete)
     {
-        int res = nanoev_tcp_read(m_conn, m_recvBuf, m_recvBufSize, __onRead);
-        if (res != NANOEV_SUCCESS)
+        if (bytes > 0)
         {
+            unsigned int toRecv = __prepareReadTokens();
+            if (!toRecv)
+                return;
+
+            int res = nanoev_tcp_read(m_conn, m_recvBuf, toRecv, __onRead);
+            if (res != NANOEV_SUCCESS)
+            {
+                __onDone(true);
+                return;
+            }
+        }
+        else
+        {
+            // 连接已断开
             __onDone(true);
             return;
         }
@@ -446,6 +483,48 @@ void HttpClient::__onRead(int status, void *buf, unsigned int bytes)
     else
     {
         __onDone(false);
+        return;
+    }
+}
+
+unsigned int HttpClient::__prepareReadTokens()
+{
+    if (m_rateLimiter == NULL)
+        return m_recvBufSize;
+
+    if (m_rateTokens < 100)
+    {
+        m_rateTokens += m_rateLimiter->Take(m_recvBufSize);
+        if (m_rateTokens < 100)
+        {
+            int ms = m_rateLimiter->WaitHint();
+            struct nanoev_timeval after = { ms / 1000, (ms % 1000)*1000 };
+            nanoev_timer_add(m_rateTimer, after, 0, __onTimer);
+            return 0;
+        }
+    }
+    return m_rateTokens;
+}
+
+void HttpClient::__consumeReadTokens(unsigned int n)
+{
+    if (m_rateLimiter == NULL)
+        return;
+
+    assert(m_rateTokens >= n);
+    m_rateTokens -= n;
+}
+
+void HttpClient::__onRateTimer()
+{
+    unsigned int toRecv = __prepareReadTokens();
+    if (!toRecv)
+        return;
+
+    int res = nanoev_tcp_read(m_conn, m_recvBuf, toRecv, __onRead);
+    if (res != NANOEV_SUCCESS)
+    {
+        __onDone(true);
         return;
     }
 }
@@ -475,6 +554,13 @@ void HttpClient::__onRead(nanoev_event *tcp, int status, void *buf, unsigned int
     HttpClient *self = (HttpClient*)nanoev_event_userdata(tcp);
     assert(self->m_conn == tcp);
     self->__onRead(status, buf, bytes);
+}
+
+void HttpClient::__onTimer(nanoev_event *timer)
+{
+    HttpClient *self = (HttpClient*)nanoev_event_userdata(timer);
+    assert(self->m_rateTimer == timer);
+    self->__onRateTimer();
 }
 
 //------------------------------------------------------------------------------

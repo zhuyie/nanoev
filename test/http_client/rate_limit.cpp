@@ -99,6 +99,7 @@ void RateLimiters::__onTimer(nanoev_event *timer)
 RateLimiter::RateLimiter()
 {
     m_rate = 0;
+    m_burst = 0;
     m_value = 0;
 }
 
@@ -129,4 +130,9 @@ unsigned int RateLimiter::Take(unsigned int want)
         n = want;
     m_value = m_value - n;
     return n;
+}
+
+unsigned int RateLimiter::WaitHint()
+{
+    return ((unsigned int)(0.99999 / m_rate) + 1) * tickInterval;
 }

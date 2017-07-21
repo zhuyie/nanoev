@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "event_thread.h"
 #include "conn_pool.h"
+#include "rate_limit.h"
 #include "http_client.h"
 
 #include <iostream>
@@ -64,6 +65,13 @@ public:
 
 int main(int argc, char* argv[])
 {
+    int limitSpeed = 0;
+    if (argc > 1)
+    {
+        limitSpeed = atoi(argv[1]);
+        std::cout << ">>> LimitSpeed: " << limitSpeed << " KB/s" << std::endl;
+    }
+
     nanoev_init();
 
     EventThread eventThread;
@@ -72,9 +80,18 @@ int main(int argc, char* argv[])
     ConnectionPool connPool;
     connPool.Init(100, 120, &eventThread);
 
+    RateLimiters rateLimiters;
+    rateLimiters.Init(&eventThread);
+
+    RateLimiter *rateLimiter = NULL;
+    if (limitSpeed > 0)
+    {
+        rateLimiter = rateLimiters.Create(limitSpeed * 1024.0, limitSpeed * 1.1 * 1024.0);
+    }
+
     DummyHandler handler;
     HttpClient client;
-    client.Init(16384, 16384, &eventThread, &connPool, &handler);
+    client.Init(16384, 16384, &eventThread, &connPool, rateLimiter, &handler);
 
     std::string URL;
     while (true)
@@ -99,6 +116,12 @@ int main(int argc, char* argv[])
         std::cout << std::endl;
     }
 
+    if (rateLimiter)
+    {
+        rateLimiters.Destory(rateLimiter);
+    }
+
+    rateLimiters.Term();
     connPool.Term();
     eventThread.stop();
     

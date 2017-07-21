@@ -7,6 +7,7 @@
 #include "handler.h"
 #include "event_thread.h"
 #include "conn_pool.h"
+#include "rate_limit.h"
 
 //------------------------------------------------------------------------------
 
@@ -46,6 +47,7 @@ class HttpClient
 
     EventThread *m_thread;
     ConnectionPool *m_connPool;
+    RateLimiter *m_rateLimiter;
     HttpResponseHandler *m_handler;
 
     stage m_stage;
@@ -67,6 +69,9 @@ class HttpClient
 
     nanoev_event *m_conn;
     bool m_isNewConn;
+    
+    nanoev_event *m_rateTimer;
+    unsigned int m_rateTokens;
 
 public:
     HttpClient();
@@ -77,6 +82,7 @@ public:
         unsigned int recvBufSize, 
         EventThread *thread, 
         ConnectionPool *connPool,
+        RateLimiter *rateLimiter,
         HttpResponseHandler *handler
         );
 
@@ -97,10 +103,14 @@ private:
     void __onConnect(int status);
     void __onWrite(int status, void *buf, unsigned int bytes);
     void __onRead(int status, void *buf, unsigned int bytes);
+    unsigned int __prepareReadTokens();
+    void __consumeReadTokens(unsigned int n);
+    void __onRateTimer();
     static void __start(nanoev_loop *loop, void *ctx);
     static void __onConnect(nanoev_event *tcp, int status);
     static void __onWrite(nanoev_event *tcp, int status, void *buf, unsigned int bytes);
     static void __onRead(nanoev_event *tcp, int status, void *buf, unsigned int bytes);
+    static void __onTimer(nanoev_event *timer);
 
     static int __onHeaderField(http_parser *parser, const char *at, size_t length);
     static int __onHeaderValue(http_parser *parser, const char *at, size_t length);

@@ -49,6 +49,7 @@ public:
     ~RateLimiter();
 
     unsigned int Take(unsigned int want);
+    unsigned int WaitHint();
 
 private:
     bool Init(double rate, double burst);
