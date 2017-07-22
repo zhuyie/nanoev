@@ -40,7 +40,6 @@ class HttpClient
     unsigned int m_requestMaxSize;
     char *m_request;
     unsigned int m_requestSize;
-    unsigned int m_requestSent;
 
     unsigned int m_recvBufSize;
     char *m_recvBuf;
@@ -70,7 +69,9 @@ class HttpClient
     bool m_useNewConn;
     nanoev_event *m_conn;
     bool m_isNewConn;
-    
+    unsigned int m_requestSent;
+    unsigned long long m_responseReceived;
+
     nanoev_event *m_rateTimer;
     unsigned int m_rateTokens;
 

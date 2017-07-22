@@ -264,7 +264,6 @@ bool HttpClient::__writeRequest(const void *data, unsigned int len)
 void HttpClient::__reset()
 {
     m_requestSize = 0;
-    m_requestSent = 0;
 
     m_method = (HTTP_METHOD)0;
     m_URL.clear();
@@ -283,6 +282,8 @@ void HttpClient::__reset()
     m_useNewConn = false;
     m_conn = NULL;
     m_isNewConn = false;
+    m_requestSent = 0;
+    m_responseReceived = 0;
 
     m_rateTimer = NULL;
     m_rateTokens = 0;
@@ -408,7 +409,8 @@ void HttpClient::__onWrite(int status, void *buf, unsigned int bytes)
 
             nanoev_event_free(m_conn);
             m_conn = NULL;
-            
+            m_requestSent = 0;
+
             // 禁用连接池，重试一次
             __start(loop, false);
             return;
@@ -461,6 +463,8 @@ void HttpClient::__onRead(int status, void *buf, unsigned int bytes)
 
     __consumeReadTokens(bytes);
 
+    m_responseReceived += bytes;
+
     if (!m_isMessageComplete)
     {
         if (bytes > 0)
@@ -478,13 +482,27 @@ void HttpClient::__onRead(int status, void *buf, unsigned int bytes)
         }
         else
         {
-            // 连接已断开
+            if (!m_responseReceived && !m_isNewConn)
+            {
+                // 连接断开了；尚未收到任何response数据；是复用的连接池中的连接
+                nanoev_loop *loop = nanoev_event_loop(m_conn);
+
+                nanoev_event_free(m_conn);
+                m_conn = NULL;
+                m_requestSent = 0;
+
+                // 禁用连接池，重试一次
+                __start(loop, false);
+                return;
+            }
+
             __onDone(true);
             return;
         }
     }
     else
     {
+        // 正常读完了整个response
         __onDone(false);
         return;
     }
