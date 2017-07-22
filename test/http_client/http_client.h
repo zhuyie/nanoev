@@ -67,6 +67,7 @@ class HttpClient
     bool m_isStatusNotified;
     bool m_isMessageComplete;
 
+    bool m_useNewConn;
     nanoev_event *m_conn;
     bool m_isNewConn;
     
@@ -86,7 +87,7 @@ public:
         HttpResponseHandler *handler
         );
 
-    bool Open(HTTP_METHOD method, const char *URL);
+    bool Open(HTTP_METHOD method, const char *URL, bool useNewConn);
     bool PutHeader(const char *field, const char *value);
     bool PutBody(const void *data, unsigned int len);
     bool Execute();

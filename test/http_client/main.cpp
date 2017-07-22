@@ -102,7 +102,7 @@ int main(int argc, char* argv[])
         if (URL == "q" || URL == "Q")
             break;
 
-        if (client.Open(HTTP_METHOD_GET, URL.c_str()))
+        if (client.Open(HTTP_METHOD_GET, URL.c_str(), true))
         {
             if (client.Execute())
                 handler.Wait();

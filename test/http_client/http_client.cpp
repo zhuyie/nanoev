@@ -66,7 +66,7 @@ bool HttpClient::Init(
     return true;
 }
 
-bool HttpClient::Open(HTTP_METHOD method, const char *URL)
+bool HttpClient::Open(HTTP_METHOD method, const char *URL, bool useNewConn)
 {
     assert(URL);
 
@@ -83,6 +83,8 @@ bool HttpClient::Open(HTTP_METHOD method, const char *URL)
         return false;
     if (!__writeRequestLine())
         return false;
+
+    m_useNewConn = useNewConn;
 
     m_stage = open;
 
@@ -278,6 +280,7 @@ void HttpClient::__reset()
     m_isStatusNotified = false;
     m_isMessageComplete = false;
 
+    m_useNewConn = false;
     m_conn = NULL;
     m_isNewConn = false;
 
@@ -532,7 +535,7 @@ void HttpClient::__onRateTimer()
 void HttpClient::__start(nanoev_loop *loop, void *ctx)
 {
     HttpClient *self = (HttpClient*)ctx;
-    self->__start(loop, true);
+    self->__start(loop, !self->m_useNewConn);
 }
 
 void HttpClient::__onConnect(nanoev_event *tcp, int status)
