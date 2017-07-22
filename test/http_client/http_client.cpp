@@ -152,6 +152,16 @@ bool HttpClient::Execute()
     return true;
 }
 
+bool HttpClient::Abort()
+{
+    if (m_stage != execute)
+        return false;
+
+    m_thread->queueTask(new SimpleEventTask(__abort, this));
+
+    return true;
+}
+
 //------------------------------------------------------------------------------
 
 bool HttpClient::__parseURL(const char *URL)
@@ -377,6 +387,11 @@ void HttpClient::__start(nanoev_loop *loop, bool useConnPool)
     }
 }
 
+void HttpClient::__abort(nanoev_loop *loop)
+{
+    __onDone(true);
+}
+
 void HttpClient::__onConnect(int status)
 {
     if (status)
@@ -554,6 +569,12 @@ void HttpClient::__start(nanoev_loop *loop, void *ctx)
 {
     HttpClient *self = (HttpClient*)ctx;
     self->__start(loop, !self->m_useNewConn);
+}
+
+void HttpClient::__abort(nanoev_loop *loop, void *ctx)
+{
+    HttpClient *self = (HttpClient*)ctx;
+    self->__abort(loop);
 }
 
 void HttpClient::__onConnect(nanoev_event *tcp, int status)

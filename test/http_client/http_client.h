@@ -92,6 +92,7 @@ public:
     bool PutHeader(const char *field, const char *value);
     bool PutBody(const void *data, unsigned int len);
     bool Execute();
+    bool Abort();
 
 private:
     bool __parseURL(const char *URL);
@@ -102,6 +103,7 @@ private:
     void __onDone(bool isError);
 
     void __start(nanoev_loop *loop, bool useConnPool);
+    void __abort(nanoev_loop *loop);
     void __onConnect(int status);
     void __onWrite(int status, void *buf, unsigned int bytes);
     void __onRead(int status, void *buf, unsigned int bytes);
@@ -109,6 +111,7 @@ private:
     void __consumeReadTokens(unsigned int n);
     void __onRateTimer();
     static void __start(nanoev_loop *loop, void *ctx);
+    static void __abort(nanoev_loop *loop, void *ctx);
     static void __onConnect(nanoev_event *tcp, int status);
     static void __onWrite(nanoev_event *tcp, int status, void *buf, unsigned int bytes);
     static void __onRead(nanoev_event *tcp, int status, void *buf, unsigned int bytes);
