@@ -324,7 +324,7 @@ void HttpClient::__start(nanoev_loop *loop, bool useConnPool)
 {
     assert(m_conn == NULL);
 
-    if (m_rateLimiter != NULL)
+    if (m_rateLimiter != NULL && m_rateTimer == NULL)
     {
         m_rateTimer = nanoev_event_new(nanoev_event_timer, loop, this);
     }
