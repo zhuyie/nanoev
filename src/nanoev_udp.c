@@ -127,7 +127,7 @@ int nanoev_udp_read(
         return NANOEV_ERROR_FAIL;
     }
 
-    add_outstanding_io(udp->loop);
+    inc_outstanding_io(udp->loop);
     udp->flags |= NANOEV_UDP_FLAG_READING;
     udp->on_read = callback;
 
@@ -174,7 +174,7 @@ int nanoev_udp_write(
         return NANOEV_ERROR_FAIL;
     }
 
-    add_outstanding_io(udp->loop);
+    inc_outstanding_io(udp->loop);
     udp->flags |= NANOEV_UDP_FLAG_WRITING;
     udp->on_write = callback;
 

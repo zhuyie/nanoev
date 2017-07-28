@@ -110,7 +110,8 @@ struct nanoev_proactor {
 int  in_loop_thread(nanoev_loop *loop);
 int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loop *loop);
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
-void add_outstanding_io(nanoev_loop *loop);
+void inc_outstanding_io(nanoev_loop *loop);
+void dec_outstanding_io(nanoev_loop *loop);
 void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped);
 
 /*----------------------------------------------------------------------------*/

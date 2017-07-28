@@ -224,7 +224,7 @@ typedef void (*nanoev_async_callback)(
     nanoev_event *async
     );
 
-void nanoev_async_start(
+int nanoev_async_start(
     nanoev_event *event,
     nanoev_async_callback callback
     );

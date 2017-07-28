@@ -139,7 +139,7 @@ int nanoev_tcp_connect(
         goto ERROR_EXIT;
     }
 
-    add_outstanding_io(tcp->loop);
+    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
     tcp->on_connect = callback;
 
@@ -271,7 +271,7 @@ int nanoev_tcp_accept(
         goto ERROR_EXIT;
     }
 
-    add_outstanding_io(tcp->loop);
+    inc_outstanding_io(tcp->loop);
     tcp->buf_write.buf = (char*)socket_accept;
     tcp->overlapped_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
     tcp->flags |= NANOEV_TCP_FLAG_READING;
@@ -322,7 +322,7 @@ int nanoev_tcp_write(
         return NANOEV_ERROR_FAIL;
     }
 
-    add_outstanding_io(tcp->loop);
+    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
     tcp->on_write = callback;
 
@@ -364,7 +364,7 @@ int nanoev_tcp_read(
         return NANOEV_ERROR_FAIL;
     }
 
-    add_outstanding_io(tcp->loop);
+    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_read = callback;
 

@@ -6,6 +6,7 @@ struct nanoev_async {
     NANOEV_PROACTOR_FILEDS
     OVERLAPPED overlapped;
     nanoev_async_callback on_async;
+    int started;
     volatile long async_sent;
 };
 typedef struct nanoev_async nanoev_async;
@@ -38,7 +39,12 @@ void async_free(nanoev_event *event)
 {
     nanoev_async *async = (nanoev_async*)event;
 
-    if (async->async_sent) {
+    if (async->started) {
+        dec_outstanding_io(async->loop);
+        async->started = 0;
+    }
+
+    if (InterlockedCompareExchange(&(async->async_sent), 0, 0)) {
         /* lazy delete */
         add_endgame_proactor(async->loop, (nanoev_proactor*)async);
     } else {
@@ -46,7 +52,7 @@ void async_free(nanoev_event *event)
     }
 }
 
-void nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
+int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
 {
     nanoev_async *async = (nanoev_async*)event;
 
@@ -55,8 +61,14 @@ void nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
     ASSERT(in_loop_thread(async->loop));
     ASSERT(callback);
 
-    async->on_async = callback;
-    add_outstanding_io(async->loop);
+    if (!async->started) {
+        async->on_async = callback;
+        inc_outstanding_io(async->loop);
+        async->started = 1;
+        return NANOEV_SUCCESS;
+    } else {
+        return NANOEV_ERROR_ACCESS_DENIED;
+    }
 }
 
 void nanoev_async_send(nanoev_event *event)
