@@ -178,6 +178,22 @@ int nanoev_tcp_error(
     nanoev_event *event
     );
 
+int nanoev_tcp_setopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    const char *optval,
+    int optlen
+    );
+
+int nanoev_tcp_getopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    char *optval,
+    int *optlen
+    );
+
 /*----------------------------------------------------------------------------*/
 
 typedef void (*nanoev_udp_on_read)(
@@ -216,6 +232,22 @@ int nanoev_udp_bind(
 
 int nanoev_udp_error(
     nanoev_event *event
+    );
+
+int nanoev_udp_setopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    const char *optval,
+    int optlen
+    );
+
+int nanoev_udp_getopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    char *optval,
+    int *optlen
     );
 
 /*----------------------------------------------------------------------------*/

@@ -424,6 +424,54 @@ int nanoev_tcp_error(nanoev_event *event)
     return tcp->error_code;
 }
 
+int nanoev_tcp_setopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    const char *optval,
+    int optlen
+    )
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)event;
+
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+    ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
+    ASSERT(in_loop_thread(tcp->loop));
+
+    if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != setsockopt(tcp->sock, level, optname, optval, optlen))
+        return NANOEV_ERROR_FAIL;
+
+    return NANOEV_SUCCESS;
+}
+
+int nanoev_tcp_getopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    char *optval,
+    int *optlen
+    )
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)event;
+
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+    ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
+    ASSERT(in_loop_thread(tcp->loop));
+
+    if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != getsockopt(tcp->sock, level, optname, optval, optlen))
+        return NANOEV_ERROR_FAIL;
+
+    return NANOEV_SUCCESS;
+}
+
 /*----------------------------------------------------------------------------*/
 
 void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)

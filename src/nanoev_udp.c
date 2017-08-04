@@ -224,6 +224,54 @@ int nanoev_udp_error(nanoev_event *event)
     return udp->error_code;
 }
 
+int nanoev_udp_setopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    const char *optval,
+    int optlen
+    )
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
+    ASSERT(in_loop_thread(udp->loop));
+
+    if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != setsockopt(udp->sock, level, optname, optval, optlen))
+        return NANOEV_ERROR_FAIL;
+
+    return NANOEV_SUCCESS;
+}
+
+int nanoev_udp_getopt(
+    nanoev_event *event,
+    int level,
+    int optname,
+    char *optval,
+    int *optlen
+    )
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
+    ASSERT(in_loop_thread(udp->loop));
+
+    if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != getsockopt(udp->sock, level, optname, optval, optlen))
+        return NANOEV_ERROR_FAIL;
+
+    return NANOEV_SUCCESS;
+}
+
 /*----------------------------------------------------------------------------*/
 
 void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
