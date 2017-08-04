@@ -116,12 +116,14 @@ int nanoev_loop_run(nanoev_loop *loop)
                     proactor = (nanoev_proactor*)overlappeds[i].lpCompletionKey;
                     proactor->callback(proactor, overlappeds[i].lpOverlapped);
 
-                    ASSERT(loop->outstanding_io_count >= 0);
-                    loop->outstanding_io_count--;
+                    dec_outstanding_io(loop);
 
                 } else {
                     /* someone called nanoev_loop_break */
                     ASSERT(loop_break_key == overlappeds[i].lpCompletionKey);
+                    
+                    dec_outstanding_io(loop);
+
                     goto ON_LOOP_BREAK;
                 }
             }
@@ -195,14 +197,21 @@ void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
     loop->endgame_proactor_listhead = proactor;
 }
 
-void add_outstanding_io(nanoev_loop *loop)
+void inc_outstanding_io(nanoev_loop *loop)
 {
     ASSERT(loop->outstanding_io_count >= 0);
     loop->outstanding_io_count++;
 }
 
+void dec_outstanding_io(nanoev_loop *loop)
+{
+    ASSERT(loop->outstanding_io_count > 0);
+    loop->outstanding_io_count--;
+}
+
 void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped)
 {
+    inc_outstanding_io(loop);
     PostQueuedCompletionStatus(loop->iocp, cb, key, overlapped);
 }
 
