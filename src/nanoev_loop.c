@@ -107,6 +107,13 @@ int nanoev_loop_run(nanoev_loop *loop)
                 &(overlappeds[0].lpOverlapped), 
                 timeout
                 );
+            if (!success) {
+                /* If *lpOverlapped is not NULL, the function dequeues a completion packet 
+                   for a failed I/O operation from the completion port. */
+                if (overlappeds[0].lpOverlapped != NULL) {
+                    success = 1;
+                }
+            }
         }
         if (success) {
             for (i = 0; i < count; ++i) {
