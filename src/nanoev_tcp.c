@@ -63,15 +63,14 @@ void tcp_free(nanoev_event *event)
         tcp->sock = INVALID_SOCKET;
     }
 
-    if (tcp->accept_addr_buf) {
-        mem_free(tcp->accept_addr_buf);
-        tcp->accept_addr_buf = NULL;
-    }
-
     if ((tcp->flags & NANOEV_TCP_FLAG_READING) || (tcp->flags & NANOEV_TCP_FLAG_WRITING)) {
         /* lazy delete */
         add_endgame_proactor(tcp->loop, (nanoev_proactor*)tcp);
     } else {
+        if (tcp->accept_addr_buf) {
+            mem_free(tcp->accept_addr_buf);
+            tcp->accept_addr_buf = NULL;
+        }
         mem_free(tcp);
     }
 }

@@ -8,7 +8,7 @@ struct nanoev_loop {
     int error_code;                               /* last error code */
     DWORD thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
-    int outstanding_io_count;
+    long outstanding_io_count;
     struct nanoev_timeval now;
     timer_min_heap timers;
 };
@@ -199,6 +199,7 @@ int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loo
 
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
 {
+    ASSERT(!(proactor->flags & NANOEV_PROACTOR_FLAG_DELETED));
     proactor->flags |= NANOEV_PROACTOR_FLAG_DELETED;
     proactor->next = loop->endgame_proactor_listhead;
     loop->endgame_proactor_listhead = proactor;
@@ -207,13 +208,13 @@ void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
 void inc_outstanding_io(nanoev_loop *loop)
 {
     ASSERT(loop->outstanding_io_count >= 0);
-    loop->outstanding_io_count++;
+    InterlockedIncrement(&loop->outstanding_io_count);
 }
 
 void dec_outstanding_io(nanoev_loop *loop)
 {
     ASSERT(loop->outstanding_io_count > 0);
-    loop->outstanding_io_count--;
+    InterlockedDecrement(&loop->outstanding_io_count);
 }
 
 void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped)
@@ -229,6 +230,26 @@ void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overl
      && !((proactor)->flags & NANOEV_PROACTOR_FLAG_READING)   \
     )
 
+static void __free_proactor(nanoev_proactor *proactor)
+{
+    switch (proactor->type) {
+    case nanoev_event_tcp:
+        tcp_free((nanoev_event*)proactor);
+        return;
+
+    case nanoev_event_udp:
+        udp_free((nanoev_event*)proactor);
+        return;
+
+    case nanoev_event_async:
+        async_free((nanoev_event*)proactor);
+        return;
+
+    default:
+        ASSERT(0);
+    }
+}
+
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
 {
     nanoev_proactor **cur, *next;
@@ -237,7 +258,7 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
     while (*cur) {
         if (enforcing || HAS_NO_OUTSTANDING_IO(*cur)) {
             next = (*cur)->next;
-            mem_free(*cur);
+            __free_proactor(*cur);
             *cur = next;
         } else {
             cur = &((*cur)->next);
