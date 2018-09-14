@@ -215,10 +215,8 @@ static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer)
     unsigned int parent;
 
     if (timer->min_heap_idx != (unsigned int)-1) {
-        /* 容量减1 */
         heap->size--;
         
-        /* 假定最后一个节点是在timer所在的位置上（覆盖了timer），然后调整堆 */
         last = (nanoev_timer*)heap->events[heap->size];
         parent = (timer->min_heap_idx - 1) / 2;
         if (timer->min_heap_idx > 0 && __time_greater((nanoev_timer*)heap->events[parent], last))
@@ -226,7 +224,6 @@ static void min_heap_erase(timer_min_heap *heap, nanoev_timer *timer)
         else
             min_heap_shift_down(heap, timer->min_heap_idx, last);
 
-        /* 清空timer在heap中的index */
         timer->min_heap_idx = (unsigned int)-1;
     }
 }
@@ -258,7 +255,6 @@ static int min_heap_reserve(timer_min_heap *heap, unsigned int capacity_required
 
 static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer)
 {
-    /* 循环处理：若parent的timeout比timer的timeout值要大，则交换两者的位置 */
     unsigned int parent = (hole_index - 1) / 2;
     while (hole_index) {
         if (!__time_greater((nanoev_timer*)heap->events[parent], timer)) {
@@ -272,22 +268,19 @@ static void min_heap_shift_up(timer_min_heap *heap, unsigned int hole_index, nan
         parent = (hole_index - 1) / 2;
     }
 
-    /* 现在的hole_index就是timer应该在的位置 */
     heap->events[hole_index] = (nanoev_event*)timer;
     timer->min_heap_idx = hole_index;
 }
 
 static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, nanoev_timer *timer)
 {
-    unsigned int min_child = 2 * hole_index + 2;  /* 先假设right_child是较小的那个 */
+    unsigned int min_child = 2 * hole_index + 2;
     while (min_child <= heap->size) {
         if (min_child == heap->size) {
-            /* 没有right_child，只有left_child */
             min_child--;
         } else if (__time_greater((nanoev_timer*)heap->events[min_child], 
                     (nanoev_timer*)heap->events[min_child - 1])
                    ) {
-            /* left_child的值比right_child小，让min_child指向left_child */
             min_child--;
         }
 
@@ -295,7 +288,6 @@ static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, n
             break;
         }
 
-        /* 将timer和min_child位置互换 */
         heap->events[hole_index] = heap->events[min_child];
         ((nanoev_timer*)heap->events[hole_index])->min_heap_idx = hole_index;
         hole_index = min_child;
@@ -303,7 +295,6 @@ static void min_heap_shift_down(timer_min_heap *heap, unsigned int hole_index, n
         min_child = 2 * hole_index + 2;
     }
 
-    /* 现在的hole_index就是timer应该在的位置 */
     heap->events[hole_index] = (nanoev_event*)timer;
     timer->min_heap_idx = hole_index;
 }
