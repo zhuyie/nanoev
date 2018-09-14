@@ -43,5 +43,8 @@
     <ClCompile Include="nanoev_udp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="nanoev_internal_windows.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

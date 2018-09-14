@@ -26,6 +26,7 @@
   <ItemGroup>
     <ClCompile Include="nanoev_async.c" />
     <ClCompile Include="nanoev_event.c" />
+    <ClCompile Include="nanoev_internal_windows.c" />
     <ClCompile Include="nanoev_lib.c" />
     <ClCompile Include="nanoev_loop.c" />
     <ClCompile Include="nanoev_misc.c" />

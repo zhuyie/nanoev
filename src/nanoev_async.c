@@ -79,7 +79,7 @@ void nanoev_async_send(nanoev_event *event)
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
 
     if (0 == InterlockedCompareExchange(&(async->async_sent), 1, 0)) {
-        post_fake_io(async->loop, 0, (ULONG_PTR)async, &async->overlapped);
+        post_fake_io(async->loop, 0, (void*)async, &async->overlapped);
     }
 }
 

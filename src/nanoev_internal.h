@@ -3,15 +3,19 @@
 
 #include "nanoev.h"
 
-#define _CRT_SECURE_NO_WARNINGS
-#include <stdlib.h>
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <winsock2.h>
-#include <mswsock.h>
+#ifdef _WIN32
+# include "nanoev_internal_windows.h"
+#else
+# include "nanoev_internal_unix.h"
+#endif
 
 #include <assert.h>
 #define ASSERT assert
+
+/*----------------------------------------------------------------------------*/
+
+int  global_init();
+void global_term();
 
 /*----------------------------------------------------------------------------*/
 
@@ -21,46 +25,24 @@ void  mem_free(void *mem);
 
 /*----------------------------------------------------------------------------*/
 
-typedef struct {
-    LPFN_CONNECTEX ConnectEx;
-    LPFN_ACCEPTEX AcceptEx;
-} nanoev_winsock_ext;
+typedef struct timer_min_heap {
+    nanoev_event **events;
+    unsigned int capacity;
+    unsigned int size;
+} timer_min_heap;
 
-const nanoev_winsock_ext* get_winsock_ext();
+void timers_init(timer_min_heap *heap);
+void timers_term(timer_min_heap *heap);
+unsigned int timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now);
+void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now);
+void timers_adjust_backward(timer_min_heap *heap, const struct nanoev_timeval *off);
 
-#if _WIN32_WINNT < 0x0600
+timer_min_heap* get_loop_timers(nanoev_loop *loop);
 
-#define FILE_SKIP_COMPLETION_PORT_ON_SUCCESS 0x1
-#define FILE_SKIP_SET_EVENT_ON_HANDLE        0x2
-
-typedef struct _OVERLAPPED_ENTRY {
-    ULONG_PTR lpCompletionKey;
-    LPOVERLAPPED lpOverlapped;
-    ULONG_PTR Internal;
-    DWORD dwNumberOfBytesTransferred;
-} OVERLAPPED_ENTRY, *LPOVERLAPPED_ENTRY;
-
-#endif
-
-typedef BOOL (WINAPI *PFN_GetQueuedCompletionStatusEx)(
-    HANDLE CompletionPort,
-    LPOVERLAPPED_ENTRY lpCompletionPortEntries,
-    ULONG ulCount,
-    PULONG ulNumEntriesRemoved,
-    DWORD dwMilliseconds,
-    BOOL fAlertable
-    );
-typedef BOOL (WINAPI *PFN_SetFileCompletionNotificationModes)(
-    HANDLE FileHandle,
-    UCHAR Flags
-    );
-
-typedef struct {
-    PFN_GetQueuedCompletionStatusEx pGetQueuedCompletionStatusEx;
-    PFN_SetFileCompletionNotificationModes pSetFileCompletionNotificationModes;
-} nanoev_win32_ext_fns;
-
-const nanoev_win32_ext_fns* get_win32_ext_fns();
+void time_now(struct nanoev_timeval *tv);
+void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add);
+void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub);
+int  time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1);
 
 /*----------------------------------------------------------------------------*/
 
@@ -112,31 +94,7 @@ int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_lo
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
 void inc_outstanding_io(nanoev_loop *loop);
 void dec_outstanding_io(nanoev_loop *loop);
-void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped);
-
-/*----------------------------------------------------------------------------*/
-
-typedef struct timer_min_heap {
-    nanoev_event **events;
-    unsigned int capacity;
-    unsigned int size;
-} timer_min_heap;
-
-void timers_init(timer_min_heap *heap);
-void timers_term(timer_min_heap *heap);
-unsigned int timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now);
-void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now);
-void timers_adjust_backward(timer_min_heap *heap, const struct nanoev_timeval *off);
-
-timer_min_heap* get_loop_timers(nanoev_loop *loop);
-
-void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add);
-void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub);
-int  time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1);
-
-/*----------------------------------------------------------------------------*/
-
-int  ntstatus_to_winsock_error(long status);
+void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped);
 
 /*----------------------------------------------------------------------------*/
 

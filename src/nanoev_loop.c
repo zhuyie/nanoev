@@ -154,7 +154,7 @@ void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
     ASSERT(loop->iocp);
-    post_fake_io(loop, 0, loop_break_key, NULL);
+    post_fake_io(loop, 0, (void*)loop_break_key, NULL);
 }
 
 void* nanoev_loop_userdata(nanoev_loop *loop)
@@ -217,10 +217,10 @@ void dec_outstanding_io(nanoev_loop *loop)
     InterlockedDecrement(&loop->outstanding_io_count);
 }
 
-void post_fake_io(nanoev_loop *loop, DWORD cb, ULONG_PTR key, LPOVERLAPPED overlapped)
+void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped)
 {
     inc_outstanding_io(loop);
-    PostQueuedCompletionStatus(loop->iocp, cb, key, overlapped);
+    PostQueuedCompletionStatus(loop->iocp, (DWORD)cb, (ULONG_PTR)key, overlapped);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -272,10 +272,6 @@ static void __update_time(nanoev_loop *loop)
 
     nanoev_now(&tv);
 
-    /* timer内部记录的timeout是基于它所设置那个时刻的系统时间来计算的。
-       如果用户修改了系统时间，则timer的触发将不正确。
-       我们能够检测出系统时间回退了，但若系统时间向前调了，暂时没法子处理。
-     */
     if (time_cmp(&tv, &loop->now) < 0) {
         off = loop->now;
         time_sub(&off, &tv);
