@@ -10,6 +10,8 @@
 
 /*----------------------------------------------------------------------------*/
 
+typedef int socklen_t;
+
 typedef struct {
     LPFN_CONNECTEX ConnectEx;
     LPFN_ACCEPTEX AcceptEx;
