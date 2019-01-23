@@ -13,4 +13,9 @@ typedef struct _OVERLAPPED {
     int reserved;
 } OVERLAPPED, *LPOVERLAPPED;
 
+typedef struct _WSABUF {
+    unsigned int len;
+    char *buf;
+} WSABUF, *LPWSABUF;
+
 #endif /* __NANOEV_INTERNAL_UNIX_H__ */

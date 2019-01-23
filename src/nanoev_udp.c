@@ -31,7 +31,6 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
 {
     nanoev_udp *udp;
     int error_code = 0;
-    unsigned long is_nonblocking = 1;
 
     udp = (nanoev_udp*)mem_alloc(sizeof(nanoev_udp));
     if (!udp)
@@ -43,23 +42,22 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
     udp->userdata = userdata;
     udp->callback = __udp_proactor_callback;
 
-    /* Create a new socket */
     udp->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (INVALID_SOCKET == udp->sock) {
-        error_code = WSAGetLastError();
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
+#ifdef _WIN32
     /* Make the socket non-inheritable */
     SetHandleInformation((HANDLE)udp->sock, HANDLE_FLAG_INHERIT, 0);
+#endif
 
-    /* Set the socket into nonblocking mode */
-    if (0 != ioctlsocket(udp->sock, FIONBIO, &is_nonblocking)) {
-        error_code = WSAGetLastError();
+    if (!set_non_blocking(udp->sock, 1)) {
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
-    /* Associate the socket with IOCP */
     error_code = register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->loop);
     if (error_code)
         goto ERROR_EXIT;
@@ -79,7 +77,7 @@ void udp_free(nanoev_event *event)
     ASSERT(udp->type == nanoev_event_udp);
 
     if (udp->sock != INVALID_SOCKET) {
-        closesocket(udp->sock);
+        close_socket(udp->sock);
         udp->sock = INVALID_SOCKET;
     }
 
@@ -118,6 +116,8 @@ int nanoev_udp_read(
     udp->buf_read.len = len;
     memset(&udp->overlapped_read, 0, sizeof(udp->overlapped_read));
     udp->from_addr_len = sizeof(udp->from_addr);
+
+#ifdef _WIN32
     if (0 != WSARecvFrom(udp->sock, &udp->buf_read, 1, NULL, &flags,
         (struct sockaddr*)&udp->from_addr, &udp->from_addr_len, &udp->overlapped_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
@@ -126,6 +126,9 @@ int nanoev_udp_read(
         udp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(udp->loop);
     udp->flags |= NANOEV_UDP_FLAG_READING;
@@ -165,6 +168,8 @@ int nanoev_udp_write(
     udp->buf_write.buf = (char*)buf;
     udp->buf_write.len = len;
     memset(&udp->overlapped_write, 0, sizeof(udp->overlapped_write));
+
+#ifdef _WIN32
     if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
         (struct sockaddr*)&addr, sizeof(addr), &udp->overlapped_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
@@ -173,6 +178,9 @@ int nanoev_udp_write(
         udp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(udp->loop);
     udp->flags |= NANOEV_UDP_FLAG_WRITING;
@@ -205,7 +213,7 @@ int nanoev_udp_bind(
     ret_code = bind(udp->sock, (const struct sockaddr*)&local_addr, sizeof(local_addr));
     if (0 != ret_code) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
-        udp->error_code = WSAGetLastError();
+        udp->error_code = socket_last_error();
         return NANOEV_ERROR_FAIL;
     }
 
@@ -283,12 +291,16 @@ void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
     unsigned int bytes;
     struct nanoev_addr addr;
 
+#ifdef _WIN32
     /**
        Internal : This member, which specifies a system-dependent status
        InternalHigh : This member, which specifies the length of the data transferred
      */
     status = ntstatus_to_winsock_error((long)overlapped->Internal);
     bytes = (unsigned int)overlapped->InternalHigh;
+#else
+    // TODO
+#endif
 
     if (0 != status) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;

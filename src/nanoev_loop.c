@@ -4,9 +4,11 @@
 
 struct nanoev_loop {
     void *userdata;
+#ifdef _WIN32
     HANDLE iocp;                                  /* IOCP handle */
+#endif
     int error_code;                               /* last error code */
-    DWORD thread_id;                              /* thread(ID) which running the loop */
+    void* thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     long outstanding_io_count;
     struct nanoev_timeval now;
@@ -31,11 +33,13 @@ nanoev_loop* nanoev_loop_new(void *userdata)
 
     loop->userdata = userdata;
 
+#ifdef _WIN32
     loop->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, (ULONG_PTR)0, 0);
     if (!loop->iocp) {
         mem_free(loop);
         return NULL;
     }
+#endif
 
     timers_init(&loop->timers);
 
@@ -46,8 +50,10 @@ void nanoev_loop_free(nanoev_loop *loop)
 {
     ASSERT(loop);
 
+#ifdef _WIN32
     ASSERT(loop->iocp);
     CloseHandle(loop->iocp);
+#endif
 
     __process_endgame_proactor(loop, 1);
 
@@ -60,9 +66,11 @@ int nanoev_loop_run(nanoev_loop *loop)
 {
     unsigned int timeout;
     nanoev_proactor *proactor;
+#ifdef _WIN32
     OVERLAPPED_ENTRY overlappeds[128];
     BOOL success;
     DWORD i, count;
+#endif
     int ret_code = NANOEV_SUCCESS;
 
     ASSERT(loop);
@@ -70,7 +78,11 @@ int nanoev_loop_run(nanoev_loop *loop)
 
     /* record the running thread ID */
     ASSERT(loop->thread_id == 0);
-    loop->thread_id = GetCurrentThreadId();
+#ifdef _WIN32
+    loop->thread_id = (void*)GetCurrentThreadId();
+#else
+    // TODO
+#endif
 
     /* make sure we have a valid time before enter into the while loop */
     nanoev_now(&loop->now);
@@ -88,6 +100,7 @@ int nanoev_loop_run(nanoev_loop *loop)
         /* get a appropriate time-out */
         timeout = timers_timeout(&loop->timers, &loop->now);
 
+#ifdef _WIN32
         /* try to dequeue a completion package */
         if (get_win32_ext_fns()->pGetQueuedCompletionStatusEx) {
             success = get_win32_ext_fns()->pGetQueuedCompletionStatusEx(
@@ -141,11 +154,12 @@ int nanoev_loop_run(nanoev_loop *loop)
             ret_code = NANOEV_ERROR_FAIL;
             break;
         }
+#endif
     }
 
 ON_LOOP_BREAK:
     /* clear the running thread ID */
-    loop->thread_id = 0;
+    loop->thread_id = NULL;
 
     return ret_code;
 }
@@ -185,16 +199,27 @@ int in_loop_thread(nanoev_loop *loop)
 {
     ASSERT(loop);
 
-    if (loop->thread_id && GetCurrentThreadId() != loop->thread_id)
-        return 0;
+    if (loop->thread_id != NULL) {
+#ifdef _WIN32        
+        if ((DWORD)(loop->thread_id) != GetCurrentThreadId()) {
+            return 0;
+        }
+#else
+        // TODO
+#endif
+    }
 
     return 1;
 }
 
 int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loop *loop)
 {
+#ifdef _WIN32
     HANDLE ret = CreateIoCompletionPort((HANDLE)sock, loop->iocp, (ULONG_PTR)proactor, 0);
     return (ret == NULL) ? -1 : 0;
+#else
+    // TODO
+#endif
 }
 
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
@@ -208,19 +233,31 @@ void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
 void inc_outstanding_io(nanoev_loop *loop)
 {
     ASSERT(loop->outstanding_io_count >= 0);
+#ifdef _WIN32
     InterlockedIncrement(&loop->outstanding_io_count);
+#else
+    // TODO
+#endif
 }
 
 void dec_outstanding_io(nanoev_loop *loop)
 {
     ASSERT(loop->outstanding_io_count > 0);
+#ifdef _WIN32
     InterlockedDecrement(&loop->outstanding_io_count);
+#else
+    // TODO
+#endif
 }
 
 void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped)
 {
+#ifdef _WIN32
     inc_outstanding_io(loop);
     PostQueuedCompletionStatus(loop->iocp, (DWORD)cb, (ULONG_PTR)key, overlapped);
+#else
+    // TODO
+#endif
 }
 
 /*----------------------------------------------------------------------------*/

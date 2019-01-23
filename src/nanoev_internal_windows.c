@@ -117,6 +117,24 @@ const nanoev_win32_ext_fns* get_win32_ext_fns()
 
 /*----------------------------------------------------------------------------*/
 
+int set_non_blocking(SOCKET sock, int blocking)
+{
+    unsigned long mode = blocking ? 0 : 1;
+    return (ioctlsocket(sock, FIONBIO, &mode) == 0) ? 1 : 0;
+}
+
+void close_socket(SOCKET sock)
+{
+    closesocket(sock);
+}
+
+int socket_last_error()
+{
+    return WSAGetLastError();
+}
+
+/*----------------------------------------------------------------------------*/
+
 #define NTSTATUS LONG
 
 #ifndef STATUS_HOPLIMIT_EXCEEDED

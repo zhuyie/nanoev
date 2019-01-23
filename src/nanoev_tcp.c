@@ -59,7 +59,7 @@ void tcp_free(nanoev_event *event)
     ASSERT(tcp->type == nanoev_event_tcp);
 
     if (tcp->sock != INVALID_SOCKET) {
-        closesocket(tcp->sock);
+        close_socket(tcp->sock);
         tcp->sock = INVALID_SOCKET;
     }
 
@@ -83,7 +83,6 @@ int nanoev_tcp_connect(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
-    unsigned long is_nonblocking = 1;
     struct sockaddr_in local_addr;
     struct sockaddr_in remote_addr;
 
@@ -96,27 +95,27 @@ int nanoev_tcp_connect(
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    /* Create a new socket */
     tcp->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (INVALID_SOCKET == tcp->sock) {
-        error_code = WSAGetLastError();
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
+#ifdef _WIN32
     /* Make the socket non-inheritable */
     SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
+#endif
 
-    /* Set the socket into nonblocking mode */
-    if (0 != ioctlsocket(tcp->sock, FIONBIO, &is_nonblocking)) {
-        error_code = WSAGetLastError();
+    if (!set_non_blocking(tcp->sock, 1)) {
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
-    /* Associate the socket with IOCP */
     error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, tcp->loop);
     if (error_code)
         goto ERROR_EXIT;
 
+#ifdef _WIN32
     /* We have to call bind(...), or ConnectEx will failed with WSAEINVAL... */
     local_addr.sin_family = AF_INET;
     local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -137,6 +136,9 @@ int nanoev_tcp_connect(
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
@@ -158,7 +160,6 @@ int nanoev_tcp_listen(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
-    unsigned long is_nonblocking = 1;
     struct sockaddr_in addr;
 
     ASSERT(tcp);
@@ -170,23 +171,22 @@ int nanoev_tcp_listen(
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    /* Create a new socket */
     tcp->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (INVALID_SOCKET == tcp->sock) {
-        error_code = WSAGetLastError();
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
+#ifdef _WIN32
     /* Make the socket non-inheritable */
     SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
+#endif
 
-    /* Set the socket into nonblocking mode */
-    if (0 != ioctlsocket(tcp->sock, FIONBIO, &is_nonblocking)) {
-        error_code = WSAGetLastError();
+    if (!set_non_blocking(tcp->sock, 1)) {
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
-    /* Associate the socket with IOCP */
     error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, tcp->loop);
     if (error_code)
         goto ERROR_EXIT;
@@ -196,22 +196,24 @@ int nanoev_tcp_listen(
     addr.sin_addr.s_addr = local_addr->ip;
     addr.sin_port = local_addr->port;
     if (0 != bind(tcp->sock, (const struct sockaddr*)&addr, sizeof(addr))) {
-        error_code = WSAGetLastError();
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
     /* listen */
     if (0 != listen(tcp->sock, (backlog == 0 ? SOMAXCONN : backlog))) {
-        error_code = WSAGetLastError();
+        error_code = socket_last_error();
         goto ERROR_EXIT;
     }
 
+#ifdef _WIN32
     /* Allocate the buffer which used in AcceptEx */
     tcp->accept_addr_buf = (unsigned char*)mem_alloc(LOCAL_ADDR_BUF_LEN + REMOTE_ADDR_BUF_LEN);
     if (!tcp->accept_addr_buf) {
         error_code = WSAENOBUFS;
         goto ERROR_EXIT;
     }
+#endif
 
     /* We are listening now */
     tcp->flags |= NANOEV_TCP_FLAG_LISTENING;
@@ -248,6 +250,7 @@ int nanoev_tcp_accept(
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
+#ifdef _WIN32
     /* Open a socket for the accepted connection. */
     socket_accept = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (INVALID_SOCKET == socket_accept) {
@@ -269,10 +272,15 @@ int nanoev_tcp_accept(
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(tcp->loop);
+#ifdef _WIN32    
     tcp->buf_write.buf = (char*)socket_accept;
     tcp->overlapped_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
+#endif
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_accept = callback;
 
@@ -280,7 +288,7 @@ int nanoev_tcp_accept(
 
 ERROR_EXIT:
     if (socket_accept != INVALID_SOCKET)
-        closesocket(socket_accept);
+        close_socket(socket_accept);
     tcp->error_code = error_code;
     tcp->flags |= NANOEV_TCP_FLAG_ERROR;
     return NANOEV_ERROR_FAIL;
@@ -313,6 +321,8 @@ int nanoev_tcp_write(
     tcp->buf_write.buf = (char*)buf;
     tcp->buf_write.len = len;
     memset(&tcp->overlapped_write, 0, sizeof(OVERLAPPED));
+    
+#ifdef _WIN32
     if (0 != WSASend(tcp->sock, &tcp->buf_write, 1, &cb, 0, &tcp->overlapped_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
@@ -320,6 +330,9 @@ int nanoev_tcp_write(
         tcp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
@@ -355,6 +368,8 @@ int nanoev_tcp_read(
     tcp->buf_read.buf = (char*)buf;
     tcp->buf_read.len = len;
     memset(&tcp->overlapped_read, 0, sizeof(OVERLAPPED));
+    
+#ifdef _WIN32
     if (0 != WSARecv(tcp->sock, &tcp->buf_read, 1, &cb, &flags, &tcp->overlapped_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
@@ -362,6 +377,9 @@ int nanoev_tcp_read(
         tcp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
+#else
+    // TODO
+#endif
 
     inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_READING;
@@ -402,7 +420,7 @@ int nanoev_tcp_addr(
     }
     if (0 != ret_code) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
-        tcp->error_code = WSAGetLastError();
+        tcp->error_code = socket_last_error();
         return NANOEV_ERROR_FAIL;
     }
 
@@ -488,12 +506,16 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
     unsigned int bytes;
     int ret_code;
 
+#ifdef _WIN32
     /**
        Internal : This member, which specifies a system-dependent status
        InternalHigh : This member, which specifies the length of the data transferred
      */
     status = ntstatus_to_winsock_error((long)overlapped->Internal);
     bytes = (unsigned int)overlapped->InternalHigh;
+#else
+    // TODO
+#endif
 
     if (0 != status) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -527,7 +549,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
         }
 
 	} else {
-
+#ifdef _WIN32
         if (tcp->flags & NANOEV_TCP_FLAG_LISTENING) {
             /* an accept operation is completed */
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
@@ -610,7 +632,9 @@ ON_ACCEPT_ERROR:
                 on_connect((nanoev_event*)tcp, status);
             }
         }
-
+#else
+    // TODO
+#endif
     }
 }
 

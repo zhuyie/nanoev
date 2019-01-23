@@ -96,6 +96,10 @@ void inc_outstanding_io(nanoev_loop *loop);
 void dec_outstanding_io(nanoev_loop *loop);
 void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped);
 
+int  set_non_blocking(SOCKET sock, int blocking);
+void close_socket(SOCKET sock);
+int  socket_last_error();
+
 /*----------------------------------------------------------------------------*/
 
 #endif  /* __NANOEV_INTERNAL_H__ */
