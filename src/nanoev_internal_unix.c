@@ -22,11 +22,11 @@ void time_now(struct nanoev_timeval *tv)
 
 int set_non_blocking(SOCKET sock, int blocking)
 {
-    int flags = fcntl(fd, F_GETFL, 0);
+    int flags = fcntl(sock, F_GETFL, 0);
     if (flags == -1) 
-        return false;
+        return 0;
     flags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
-    return (fcntl(fd, F_SETFL, flags) == 0) ? 1 : 0;
+    return (fcntl(sock, F_SETFL, flags) == 0) ? 1 : 0;
 }
 
 void close_socket(SOCKET sock)

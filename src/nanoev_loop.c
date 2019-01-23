@@ -17,7 +17,9 @@ struct nanoev_loop {
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
 static void __update_time(nanoev_loop *loop);
+#ifdef _WIN32
 static const ULONG_PTR loop_break_key = (ULONG_PTR)-1;
+#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -74,10 +76,9 @@ int nanoev_loop_run(nanoev_loop *loop)
     int ret_code = NANOEV_SUCCESS;
 
     ASSERT(loop);
-    ASSERT(loop->iocp);
 
     /* record the running thread ID */
-    ASSERT(loop->thread_id == 0);
+    ASSERT(loop->thread_id == NULL);
 #ifdef _WIN32
     loop->thread_id = (void*)GetCurrentThreadId();
 #else
@@ -167,8 +168,9 @@ ON_LOOP_BREAK:
 void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
-    ASSERT(loop->iocp);
+#ifdef _WIN32
     post_fake_io(loop, 0, (void*)loop_break_key, NULL);
+#endif
 }
 
 void* nanoev_loop_userdata(nanoev_loop *loop)
@@ -219,6 +221,7 @@ int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loo
     return (ret == NULL) ? -1 : 0;
 #else
     // TODO
+    return -1;
 #endif
 }
 

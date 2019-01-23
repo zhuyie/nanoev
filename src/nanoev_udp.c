@@ -97,7 +97,9 @@ int nanoev_udp_read(
     )
 {
     nanoev_udp *udp = (nanoev_udp*)event;
+#ifdef _WIN32
     DWORD flags = 0;
+#endif
 
     ASSERT(udp);
     ASSERT(udp->type == nanoev_event_udp);
@@ -274,7 +276,7 @@ int nanoev_udp_getopt(
     if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    if (0 != getsockopt(udp->sock, level, optname, optval, optlen))
+    if (0 != getsockopt(udp->sock, level, optname, optval, (socklen_t*)optlen))
         return NANOEV_ERROR_FAIL;
 
     return NANOEV_SUCCESS;

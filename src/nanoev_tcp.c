@@ -235,7 +235,9 @@ int nanoev_tcp_accept(
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code;
     SOCKET socket_accept = INVALID_SOCKET;
+#ifdef _WIN32
     DWORD bytes;
+#endif
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -302,7 +304,9 @@ int nanoev_tcp_write(
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
+#ifdef _WIN32
     DWORD cb;
+#endif
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -349,7 +353,9 @@ int nanoev_tcp_read(
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
+#ifdef _WIN32
     DWORD cb, flags = 0;
+#endif
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -396,7 +402,7 @@ int nanoev_tcp_addr(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     struct sockaddr_in sock_addr;
-    int len;
+    socklen_t len;
     int ret_code;
 
     ASSERT(tcp);
@@ -483,7 +489,7 @@ int nanoev_tcp_getopt(
     if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    if (0 != getsockopt(tcp->sock, level, optname, optval, optlen))
+    if (0 != getsockopt(tcp->sock, level, optname, optval, (socklen_t*)optlen))
         return NANOEV_ERROR_FAIL;
 
     return NANOEV_SUCCESS;
