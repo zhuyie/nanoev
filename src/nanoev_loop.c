@@ -18,7 +18,7 @@ struct nanoev_loop {
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
 static void __update_time(nanoev_loop *loop);
 #ifdef _WIN32
-static const ULONG_PTR loop_break_key = (ULONG_PTR)-1;
+static nanoev_proactor* loop_break_key = (nanoev_proactor*)-1;
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -141,7 +141,7 @@ int nanoev_loop_run(nanoev_loop *loop)
 
                 } else {
                     /* someone called nanoev_loop_break */
-                    ASSERT(loop_break_key == overlappeds[i].lpCompletionKey);
+                    ASSERT((ULONG_PTR)loop_break_key == overlappeds[i].lpCompletionKey);
                     
                     dec_outstanding_io(loop);
 
@@ -169,7 +169,7 @@ void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
 #ifdef _WIN32
-    post_fake_io(loop, 0, (void*)loop_break_key, NULL);
+    post_fake_io(loop, loop_break_key, NULL);
 #endif
 }
 
@@ -253,11 +253,11 @@ void dec_outstanding_io(nanoev_loop *loop)
 #endif
 }
 
-void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped)
+void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
 #ifdef _WIN32
     inc_outstanding_io(loop);
-    PostQueuedCompletionStatus(loop->iocp, (DWORD)cb, (ULONG_PTR)key, overlapped);
+    PostQueuedCompletionStatus(loop->iocp, 0, (ULONG_PTR)proactor, ctx);
 #else
     // TODO
 #endif

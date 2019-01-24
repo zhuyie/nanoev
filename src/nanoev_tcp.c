@@ -9,10 +9,10 @@ struct nanoev_tcp {
     NANOEV_PROACTOR_FILEDS
     SOCKET sock;
     int error_code;
-    OVERLAPPED overlapped_read;
-    OVERLAPPED overlapped_write;
-    WSABUF buf_read;
-    WSABUF buf_write;
+    io_context ctx_read;
+    io_context ctx_write;
+    io_buf buf_read;
+    io_buf buf_write;
     unsigned char *accept_addr_buf;
     /* callback functions */
     nanoev_tcp_on_write   on_write;
@@ -22,7 +22,7 @@ struct nanoev_tcp {
 };
 typedef struct nanoev_tcp nanoev_tcp;
 
-static void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped);
+static void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket);
 
 #define NANOEV_TCP_FLAG_CONNECTED    (0x00000001)      /* connection established */
@@ -130,7 +130,7 @@ int nanoev_tcp_connect(
     remote_addr.sin_addr.s_addr = server_addr->ip;
     remote_addr.sin_port = server_addr->port;
     if (!get_winsock_ext()->ConnectEx(tcp->sock, (const struct sockaddr*)&remote_addr, 
-            sizeof(remote_addr), NULL, 0, NULL, &tcp->overlapped_write)
+            sizeof(remote_addr), NULL, 0, NULL, &tcp->ctx_write)
          && ERROR_IO_PENDING != WSAGetLastError()
         ) {
         error_code = WSAGetLastError();
@@ -264,11 +264,11 @@ int nanoev_tcp_accept(
     SetHandleInformation((HANDLE)socket_accept, HANDLE_FLAG_INHERIT, 0);
 
     /* call AcceptEx */
-    memset(&tcp->overlapped_read, 0, sizeof(OVERLAPPED));
+    memset(&tcp->ctx_read, 0, sizeof(io_context));
     ASSERT(tcp->accept_addr_buf);
     if (!get_winsock_ext()->AcceptEx(tcp->sock, socket_accept, tcp->accept_addr_buf, 
             0, LOCAL_ADDR_BUF_LEN, REMOTE_ADDR_BUF_LEN, 
-            &bytes, &tcp->overlapped_read)
+            &bytes, &tcp->ctx_read)
          && ERROR_IO_PENDING != WSAGetLastError()
         ) {
         error_code = WSAGetLastError();
@@ -281,7 +281,7 @@ int nanoev_tcp_accept(
     inc_outstanding_io(tcp->loop);
 #ifdef _WIN32    
     tcp->buf_write.buf = (char*)socket_accept;
-    tcp->overlapped_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
+    tcp->ctx_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
 #endif
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_accept = callback;
@@ -324,10 +324,10 @@ int nanoev_tcp_write(
 
     tcp->buf_write.buf = (char*)buf;
     tcp->buf_write.len = len;
-    memset(&tcp->overlapped_write, 0, sizeof(OVERLAPPED));
+    memset(&tcp->ctx_write, 0, sizeof(io_context));
     
 #ifdef _WIN32
-    if (0 != WSASend(tcp->sock, &tcp->buf_write, 1, &cb, 0, &tcp->overlapped_write, NULL)
+    if (0 != WSASend(tcp->sock, &tcp->buf_write, 1, &cb, 0, &tcp->ctx_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -373,10 +373,10 @@ int nanoev_tcp_read(
 
     tcp->buf_read.buf = (char*)buf;
     tcp->buf_read.len = len;
-    memset(&tcp->overlapped_read, 0, sizeof(OVERLAPPED));
+    memset(&tcp->ctx_read, 0, sizeof(io_context));
     
 #ifdef _WIN32
-    if (0 != WSARecv(tcp->sock, &tcp->buf_read, 1, &cb, &flags, &tcp->overlapped_read, NULL)
+    if (0 != WSARecv(tcp->sock, &tcp->buf_read, 1, &cb, &flags, &tcp->ctx_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -497,7 +497,7 @@ int nanoev_tcp_getopt(
 
 /*----------------------------------------------------------------------------*/
 
-void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
+void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     nanoev_tcp *tcp = (nanoev_tcp*)proactor;
     nanoev_tcp_on_write on_write;
@@ -517,8 +517,8 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
        Internal : This member, which specifies a system-dependent status
        InternalHigh : This member, which specifies the length of the data transferred
      */
-    status = ntstatus_to_winsock_error((long)overlapped->Internal);
-    bytes = (unsigned int)overlapped->InternalHigh;
+    status = ntstatus_to_winsock_error((long)ctx->Internal);
+    bytes = (unsigned int)ctx->InternalHigh;
 #else
     // TODO
 #endif
@@ -530,7 +530,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
 
     if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
 
-        if (&tcp->overlapped_read == overlapped) {
+        if (&tcp->ctx_read == ctx) {
             /* a recv operation is completed */
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
             tcp->flags &= ~NANOEV_TCP_FLAG_READING;
@@ -543,7 +543,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
 
         } else {
             /* a send operation is completed */
-            ASSERT(&tcp->overlapped_write == overlapped);
+            ASSERT(&tcp->ctx_write == ctx);
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_WRITING);
             tcp->flags &= ~NANOEV_TCP_FLAG_WRITING;
             on_write = tcp->on_write;
@@ -565,7 +565,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
             tcp->on_accept = NULL;
 
             socket_accept = (SOCKET)tcp->buf_write.buf;
-            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->overlapped_write.Internal;  /* Tricky */
+            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->ctx_write.Internal;  /* Tricky */
             tcp_new = NULL;
             userdata_new = NULL;
 

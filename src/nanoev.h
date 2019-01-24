@@ -212,7 +212,7 @@ typedef void (*nanoev_udp_on_write)(
 
 int nanoev_udp_read(
     nanoev_event *event, 
-    const void *buf, 
+    void *buf, 
     unsigned int len, 
     nanoev_udp_on_read callback
     );

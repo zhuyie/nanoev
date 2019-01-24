@@ -73,7 +73,7 @@ void timer_free(nanoev_event *event);
 struct nanoev_proactor;
 typedef struct nanoev_proactor nanoev_proactor;
 
-typedef void (*proactor_callback)(nanoev_proactor *proactor, LPOVERLAPPED overlapped);
+typedef void (*proactor_callback)(nanoev_proactor *proactor, io_context *ctx);
 
 #define NANOEV_PROACTOR_FILEDS                               \
     NANOEV_EVENT_FILEDS                                      \
@@ -94,7 +94,7 @@ int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_lo
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
 void inc_outstanding_io(nanoev_loop *loop);
 void dec_outstanding_io(nanoev_loop *loop);
-void post_fake_io(nanoev_loop *loop, unsigned int cb, void *key, LPOVERLAPPED overlapped);
+void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx);
 
 int  set_non_blocking(SOCKET sock, int blocking);
 void close_socket(SOCKET sock);

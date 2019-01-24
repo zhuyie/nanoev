@@ -14,13 +14,13 @@ typedef int SOCKET;
 
 #define INVALID_SOCKET (-1)
 
-typedef struct _OVERLAPPED {
+typedef struct io_context {
     int reserved;
-} OVERLAPPED, *LPOVERLAPPED;
+} io_context;
 
-typedef struct _WSABUF {
+typedef struct io_buf {
     unsigned int len;
     char *buf;
-} WSABUF, *LPWSABUF;
+} io_buf;
 
 #endif /* __NANOEV_INTERNAL_UNIX_H__ */

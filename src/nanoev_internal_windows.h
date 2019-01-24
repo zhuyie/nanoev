@@ -12,6 +12,10 @@
 
 typedef int socklen_t;
 
+typedef OVERLAPPED io_context;
+
+typedef WSABUF io_buf;
+
 typedef struct {
     LPFN_CONNECTEX ConnectEx;
     LPFN_ACCEPTEX AcceptEx;

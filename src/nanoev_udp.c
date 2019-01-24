@@ -6,19 +6,18 @@ struct nanoev_udp {
     NANOEV_PROACTOR_FILEDS
     SOCKET sock;
     int error_code;
-    OVERLAPPED overlapped_read;
-    OVERLAPPED overlapped_write;
-    WSABUF buf_read;
-    WSABUF buf_write;
+    io_context ctx_read;
+    io_context ctx_write;
+    io_buf buf_read;
+    io_buf buf_write;
     struct sockaddr_in from_addr;
-    int from_addr_len;
     /* callback functions */
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read  on_read;
 };
 typedef struct nanoev_udp nanoev_udp;
 
-static void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped);
+static void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
@@ -91,12 +90,13 @@ void udp_free(nanoev_event *event)
 
 int nanoev_udp_read(
     nanoev_event *event, 
-    const void *buf, 
+    void *buf, 
     unsigned int len, 
     nanoev_udp_on_read callback
     )
 {
     nanoev_udp *udp = (nanoev_udp*)event;
+    socklen_t from_addr_len;
 #ifdef _WIN32
     DWORD flags = 0;
 #endif
@@ -116,12 +116,12 @@ int nanoev_udp_read(
 
     udp->buf_read.buf = (char*)buf;
     udp->buf_read.len = len;
-    memset(&udp->overlapped_read, 0, sizeof(udp->overlapped_read));
-    udp->from_addr_len = sizeof(udp->from_addr);
+    memset(&udp->ctx_read, 0, sizeof(io_context));
+    from_addr_len = sizeof(udp->from_addr);
 
 #ifdef _WIN32
     if (0 != WSARecvFrom(udp->sock, &udp->buf_read, 1, NULL, &flags,
-        (struct sockaddr*)&udp->from_addr, &udp->from_addr_len, &udp->overlapped_read, NULL)
+        (struct sockaddr*)&udp->from_addr, &from_addr_len, &udp->ctx_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
@@ -169,11 +169,11 @@ int nanoev_udp_write(
 
     udp->buf_write.buf = (char*)buf;
     udp->buf_write.len = len;
-    memset(&udp->overlapped_write, 0, sizeof(udp->overlapped_write));
+    memset(&udp->ctx_write, 0, sizeof(io_context));
 
 #ifdef _WIN32
     if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
-        (struct sockaddr*)&addr, sizeof(addr), &udp->overlapped_write, NULL)
+        (struct sockaddr*)&addr, sizeof(addr), &udp->ctx_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
@@ -284,7 +284,7 @@ int nanoev_udp_getopt(
 
 /*----------------------------------------------------------------------------*/
 
-void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
+void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     nanoev_udp *udp = (nanoev_udp*)proactor;
     nanoev_udp_on_write on_write;
@@ -298,8 +298,8 @@ void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
        Internal : This member, which specifies a system-dependent status
        InternalHigh : This member, which specifies the length of the data transferred
      */
-    status = ntstatus_to_winsock_error((long)overlapped->Internal);
-    bytes = (unsigned int)overlapped->InternalHigh;
+    status = ntstatus_to_winsock_error((long)ctx->Internal);
+    bytes = (unsigned int)ctx->InternalHigh;
 #else
     // TODO
 #endif
@@ -309,7 +309,7 @@ void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
         udp->error_code = status;
     }
 
-    if (&udp->overlapped_read == overlapped) {
+    if (&udp->ctx_read == ctx) {
         ASSERT(udp->flags & NANOEV_UDP_FLAG_READING);
 
         udp->flags &= ~NANOEV_UDP_FLAG_READING;
@@ -323,7 +323,7 @@ void __udp_proactor_callback(nanoev_proactor *proactor, LPOVERLAPPED overlapped)
         }
 
     } else {
-        ASSERT(&udp->overlapped_write == overlapped);
+        ASSERT(&udp->ctx_write == ctx);
         ASSERT(udp->flags & NANOEV_UDP_FLAG_WRITING);
 
         udp->flags &= ~NANOEV_UDP_FLAG_WRITING;
