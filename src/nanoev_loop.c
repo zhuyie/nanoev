@@ -17,9 +17,7 @@ struct nanoev_loop {
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
 static void __update_time(nanoev_loop *loop);
-#ifdef _WIN32
 static nanoev_proactor* loop_break_key = (nanoev_proactor*)-1;
-#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -225,6 +223,13 @@ void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
      && !((proactor)->flags & NANOEV_PROACTOR_FLAG_READING)   \
     )
 
+static void __remove_lazy_delete_flags(nanoev_proactor *proactor)
+{
+    proactor->flags &= ~NANOEV_PROACTOR_FLAG_DELETED;
+    proactor->flags &= ~NANOEV_PROACTOR_FLAG_READING;
+    proactor->flags &= ~NANOEV_PROACTOR_FLAG_WRITING;
+}
+
 static void __free_proactor(nanoev_proactor *proactor)
 {
     switch (proactor->type) {
@@ -253,6 +258,9 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
     while (*cur) {
         if (enforcing || HAS_NO_OUTSTANDING_IO(*cur)) {
             next = (*cur)->next;
+            if (enforcing) {
+                __remove_lazy_delete_flags(*cur);
+            }
             __free_proactor(*cur);
             *cur = next;
         } else {
