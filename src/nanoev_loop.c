@@ -1,12 +1,12 @@
 #include "nanoev_internal.h"
+#include "nanoev_poller.h"
 
 /*----------------------------------------------------------------------------*/
 
 struct nanoev_loop {
     void *userdata;
-#ifdef _WIN32
-    HANDLE iocp;                                  /* IOCP handle */
-#endif
+    poller_impl *poller_impl_;
+    poller poller_;
     int error_code;                               /* last error code */
     void* thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
@@ -35,13 +35,14 @@ nanoev_loop* nanoev_loop_new(void *userdata)
 
     loop->userdata = userdata;
 
-#ifdef _WIN32
-    loop->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, (ULONG_PTR)0, 0);
-    if (!loop->iocp) {
+    loop->poller_impl_ = get_poller_impl();
+    ASSERT(loop->poller_impl_);
+
+    loop->poller_ = loop->poller_impl_->poller_create();
+    if (!loop->poller_) {
         mem_free(loop);
         return NULL;
     }
-#endif
 
     timers_init(&loop->timers);
 
@@ -52,10 +53,8 @@ void nanoev_loop_free(nanoev_loop *loop)
 {
     ASSERT(loop);
 
-#ifdef _WIN32
-    ASSERT(loop->iocp);
-    CloseHandle(loop->iocp);
-#endif
+    ASSERT(loop->poller_);
+    loop->poller_impl_->poller_destroy(loop->poller_);
 
     __process_endgame_proactor(loop, 1);
 
@@ -66,13 +65,9 @@ void nanoev_loop_free(nanoev_loop *loop)
 
 int nanoev_loop_run(nanoev_loop *loop)
 {
-    unsigned int timeout;
-    nanoev_proactor *proactor;
-#ifdef _WIN32
-    OVERLAPPED_ENTRY overlappeds[128];
-    BOOL success;
-    DWORD i, count;
-#endif
+    poller_event events[128];
+    int count, i;
+    struct nanoev_timeval timeout;
     int ret_code = NANOEV_SUCCESS;
 
     ASSERT(loop);
@@ -99,63 +94,28 @@ int nanoev_loop_run(nanoev_loop *loop)
         __process_endgame_proactor(loop, 0);
 
         /* get a appropriate time-out */
-        timeout = timers_timeout(&loop->timers, &loop->now);
+        timers_timeout(&loop->timers, &loop->now, &timeout);
 
-#ifdef _WIN32
-        /* try to dequeue a completion package */
-        if (get_win32_ext_fns()->pGetQueuedCompletionStatusEx) {
-            success = get_win32_ext_fns()->pGetQueuedCompletionStatusEx(
-                loop->iocp,
-                overlappeds,
-                sizeof(overlappeds) / sizeof(overlappeds[0]),
-                &count,
-                timeout,
-                FALSE
-                );
-        } else {
-            count = 1;
-            success = GetQueuedCompletionStatus(
-                loop->iocp, 
-                &(overlappeds[0].dwNumberOfBytesTransferred), 
-                &(overlappeds[0].lpCompletionKey), 
-                &(overlappeds[0].lpOverlapped), 
-                timeout
-                );
-            if (!success) {
-                /* If *lpOverlapped is not NULL, the function dequeues a completion packet 
-                   for a failed I/O operation from the completion port. */
-                if (overlappeds[0].lpOverlapped != NULL) {
-                    success = 1;
-                }
-            }
-        }
-        if (success) {
-            for (i = 0; i < count; ++i) {
-                if (overlappeds[i].lpOverlapped) {
-                    /* process the completion packet */
-                    ASSERT(overlappeds[i].lpCompletionKey);
-                    proactor = (nanoev_proactor*)overlappeds[i].lpCompletionKey;
-                    proactor->callback(proactor, overlappeds[i].lpOverlapped);
-
-                    dec_outstanding_io(loop);
-
-                } else {
-                    /* someone called nanoev_loop_break */
-                    ASSERT((ULONG_PTR)loop_break_key == overlappeds[i].lpCompletionKey);
-                    
-                    dec_outstanding_io(loop);
-
-                    goto ON_LOOP_BREAK;
-                }
-            }
-
-        } else if (WAIT_TIMEOUT != GetLastError()) {
-            /* unexpected error */
-            loop->error_code = GetLastError();
+        /* waiting I/O events */
+        count = loop->poller_impl_->poller_wait(
+            loop->poller_, 
+            events, 
+            sizeof(events)/sizeof(events[0]), 
+            &timeout);
+        if (count < 0) {
             ret_code = NANOEV_ERROR_FAIL;
             break;
         }
-#endif
+
+        /* process events */
+        for (i = 0; i < count; ++i) {
+            if (events[i].proactor == loop_break_key) {
+                dec_outstanding_io(loop);
+                goto ON_LOOP_BREAK;
+            }
+            events[i].proactor->callback(events[i].proactor, events[i].ctx);
+            dec_outstanding_io(loop);
+        }
     }
 
 ON_LOOP_BREAK:
@@ -216,13 +176,7 @@ int in_loop_thread(nanoev_loop *loop)
 
 int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loop *loop)
 {
-#ifdef _WIN32
-    HANDLE ret = CreateIoCompletionPort((HANDLE)sock, loop->iocp, (ULONG_PTR)proactor, 0);
-    return (ret == NULL) ? -1 : 0;
-#else
-    // TODO
-    return -1;
-#endif
+    return loop->poller_impl_->poller_add(loop->poller_, sock, proactor, 0);
 }
 
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
@@ -256,8 +210,9 @@ void dec_outstanding_io(nanoev_loop *loop)
 void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
 #ifdef _WIN32
+    HANDLE iocp = (HANDLE)loop->poller_impl_->poller_handle(loop->poller_);
     inc_outstanding_io(loop);
-    PostQueuedCompletionStatus(loop->iocp, 0, (ULONG_PTR)proactor, ctx);
+    PostQueuedCompletionStatus(iocp, 0, (ULONG_PTR)proactor, ctx);
 #else
     // TODO
 #endif

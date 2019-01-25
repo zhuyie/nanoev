@@ -33,7 +33,7 @@ typedef struct timer_min_heap {
 
 void timers_init(timer_min_heap *heap);
 void timers_term(timer_min_heap *heap);
-unsigned int timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now);
+void timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now, struct nanoev_timeval *timeout);
 void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now);
 void timers_adjust_backward(timer_min_heap *heap, const struct nanoev_timeval *off);
 

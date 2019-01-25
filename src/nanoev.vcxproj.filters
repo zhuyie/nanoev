@@ -17,6 +17,9 @@
     <ClInclude Include="nanoev.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="nanoev_poller.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="nanoev_loop.c">
@@ -44,6 +47,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="nanoev_internal_windows.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nanoev_poller.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nanoev_poller_iocp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

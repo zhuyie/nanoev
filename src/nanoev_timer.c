@@ -120,23 +120,25 @@ void timers_term(timer_min_heap *heap)
     mem_free(heap->events);
 }
 
-unsigned int timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now)
+void timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now, struct nanoev_timeval *timeout)
 {
     nanoev_timer *top;
-    struct nanoev_timeval tv;
 
     ASSERT(heap && now);
 
-    if (!heap->size)
-        return 0xffffffff;  /* INFINITI */
+    if (!heap->size) {
+        timeout->tv_sec = -1;
+        return;
+    }
 
     top = (nanoev_timer*)heap->events[0];
-    tv = top->timeout;
-    if (time_cmp(&tv, now) <= 0)
-        return 0;
-
-    time_sub(&tv, now);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;  /* convert to milliseconds */
+    *timeout = top->timeout;
+    if (time_cmp(timeout, now) <= 0) {
+        timeout->tv_sec = 0;
+        timeout->tv_usec = 0;
+    } else {
+        time_sub(timeout, now);
+    }
 }
 
 void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now)
