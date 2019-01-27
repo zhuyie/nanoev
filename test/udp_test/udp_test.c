@@ -5,8 +5,12 @@
 #include <assert.h>
 #define ASSERT assert
 
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+
+#endif
 
 struct nanoev_addr local_addr;
 struct nanoev_addr server_addr;
@@ -37,7 +41,6 @@ void on_read(
 
     //printf("on_read status=%d bytes=%u data=%s\n", status, bytes, buf);
 
-    // 继续读下一个包
     ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
     ASSERT(ret_code == NANOEV_SUCCESS);
 }
@@ -70,7 +73,8 @@ int main(int argc, char* argv[])
     int ret_code;
     nanoev_loop *loop;
     nanoev_event *udp;
-    DWORD dwTickStart, dwTime;
+    struct nanoev_timeval tmStart, tmEnd;
+    unsigned int duration;
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -85,22 +89,20 @@ int main(int argc, char* argv[])
     ret_code = nanoev_udp_bind(udp, &local_addr);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    dwTickStart = GetTickCount();
+    nanoev_now(&tmStart);
 
-    // 开始读
     ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    // 写出第一个包
     nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
     ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    // 进入loop
     nanoev_loop_run(loop);
 
-    dwTime = GetTickCount() - dwTickStart;
-    printf("time = %u ms\n", dwTime);
+    nanoev_now(&tmEnd);
+    duration = (tmEnd.tv_sec*1000 + tmEnd.tv_usec/1000) - (tmStart.tv_sec*1000 + tmStart.tv_usec/1000);
+    printf("time = %u ms\n", duration);
 
     printf("read  success=%d fail=%d\n", read_success_count, read_fail_count);
     printf("write success=%d fail=%d\n", write_success_count, write_fail_count);
