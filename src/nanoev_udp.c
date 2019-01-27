@@ -11,6 +11,7 @@ struct nanoev_udp {
     io_buf buf_read;
     io_buf buf_write;
     struct sockaddr_in from_addr;
+    socklen_t from_addr_len;
     /* callback functions */
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read  on_read;
@@ -96,7 +97,6 @@ int nanoev_udp_read(
     )
 {
     nanoev_udp *udp = (nanoev_udp*)event;
-    socklen_t from_addr_len;
 #ifdef _WIN32
     DWORD flags = 0;
 #endif
@@ -117,11 +117,19 @@ int nanoev_udp_read(
     udp->buf_read.buf = (char*)buf;
     udp->buf_read.len = len;
     memset(&udp->ctx_read, 0, sizeof(io_context));
-    from_addr_len = sizeof(udp->from_addr);
+    udp->from_addr_len = sizeof(udp->from_addr);
 
 #ifdef _WIN32
+    // MSDN:
+    // ...
+    // WSARecvFrom returns SOCKET_ERROR and indicates error code WSA_IO_PENDING. 
+    // In this case, lpNumberOfBytesRecvd and lpFlags is not updated.
+    // ...
+    // Also, the values indicated by lpFrom and lpFromlen are not updated until completion is itself indicated. 
+    // Applications must not use or disturb these values until they have been updated, 
+    // therefore the application must not use automatic (that is, stack-based) variables for these parameters.
     if (0 != WSARecvFrom(udp->sock, &udp->buf_read, 1, NULL, &flags,
-        (struct sockaddr*)&udp->from_addr, &from_addr_len, &udp->ctx_read, NULL)
+        (struct sockaddr*)&udp->from_addr, &udp->from_addr_len, &udp->ctx_read, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
@@ -163,6 +171,7 @@ int nanoev_udp_write(
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
+    memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = to_addr->ip;
     addr.sin_port = to_addr->port;
