@@ -8,12 +8,14 @@ SOURCES= \
 	nanoev_internal_unix.c \
 	nanoev_tcp.c \
 	nanoev_udp.c \
-	nanoev_loop.c
+	nanoev_async.c \
+	nanoev_loop.c \
+	nanoev_poller.c
 
 OBJECTS= $(subst .c,.o,$(SOURCES))
 
 $(LIB): $(OBJECTS)
-	ar rcs $@ $^
+	libtool -static -o $@ $^
 	
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<

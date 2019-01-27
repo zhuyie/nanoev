@@ -44,12 +44,16 @@ void async_free(nanoev_event *event)
         async->started = 0;
     }
 
+#ifdef _WIN32
     if (InterlockedCompareExchange(&(async->async_sent), 0, 0)) {
         /* lazy delete */
         add_endgame_proactor(async->loop, (nanoev_proactor*)async);
     } else {
         mem_free(async);
     }
+#else
+    // TODO
+#endif
 }
 
 int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
@@ -78,9 +82,13 @@ void nanoev_async_send(nanoev_event *event)
     ASSERT(async);
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
 
+#ifdef _WIN32
     if (0 == InterlockedCompareExchange(&(async->async_sent), 1, 0)) {
         post_fake_io(async->loop, (nanoev_proactor*)async, &async->ctx);
     }
+#else
+    // TODO
+#endif
 }
 
 int nanoev_async_pending(nanoev_event *event)
@@ -90,8 +98,13 @@ int nanoev_async_pending(nanoev_event *event)
     ASSERT(async);
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
 
+#ifdef _WIN32
     // return async->async_sent;
     return InterlockedCompareExchange(&(async->async_sent), 0, 0);
+#else
+    // TODO
+    return 0;
+#endif
 }
 
 /*----------------------------------------------------------------------------*/
@@ -100,10 +113,14 @@ void __async_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     nanoev_async *async = (nanoev_async*)proactor;
 
+#ifdef _WIN32
     // async->async_sent = 0;
     InterlockedCompareExchange(&(async->async_sent), 0, 1);
 
     if (!(async->flags & NANOEV_ASYNC_FLAG_DELETED)) {
         async->on_async((nanoev_event*)async);
     }
+#else
+    // TODO    
+#endif
 }
