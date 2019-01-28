@@ -10,7 +10,9 @@ SOURCES= \
 	nanoev_udp.c \
 	nanoev_async.c \
 	nanoev_loop.c \
-	nanoev_poller.c
+	nanoev_poller.c \
+	nanoev_poller_iocp.c \
+	nanoev_poller_kqueue.c
 
 OBJECTS= $(subst .c,.o,$(SOURCES))
 

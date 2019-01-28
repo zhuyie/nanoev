@@ -26,8 +26,9 @@ typedef struct poller_impl {
 
     int (*poller_wait)(poller p, poller_event *events, int max_events, const struct nanoev_timeval *timeout);
 
+#ifdef _WIN32
     void* (*poller_handle)(poller p);
-
+#endif
 } poller_impl;
 
 poller_impl* get_poller_impl();

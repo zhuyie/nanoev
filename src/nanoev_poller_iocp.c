@@ -5,12 +5,14 @@
 /*----------------------------------------------------------------------------*/
 
 typedef struct _iocp_poller {
-	HANDLE iocp;
+    HANDLE iocp;
 } _iocp_poller;
 
 poller iocp_poller_create()
 {
     _iocp_poller *p = (_iocp_poller*)mem_alloc(sizeof(_iocp_poller));
+    if (!p)
+        return NULL;
 
     p->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, (ULONG_PTR)0, 0);
     if (!p->iocp) {
@@ -33,6 +35,7 @@ void iocp_poller_destroy(poller p)
 int iocp_poller_add(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
 {
     _iocp_poller *_p = (_iocp_poller*)p;
+    ASSERT(_p->iocp);
 
     HANDLE ret = CreateIoCompletionPort((HANDLE)fd, _p->iocp, (ULONG_PTR)proactor, 0);
     return (ret == NULL) ? -1 : 0;
@@ -55,6 +58,7 @@ int iocp_poller_wait(poller p, poller_event *events, int max_events, const struc
     DWORD i, count;
     unsigned int timeout_in_ms;
     _iocp_poller *_p = (_iocp_poller*)p;
+    ASSERT(_p->iocp);
 
     ASSERT(events);
     ASSERT(max_events);
@@ -122,17 +126,17 @@ void* iocp_poller_handle(poller p)
 
 /*----------------------------------------------------------------------------*/
 
-poller_impl iocp_poller_impl;
+poller_impl _nanoev_poller_impl;
 
 void init_iocp_poller_impl()
 {
-    iocp_poller_impl.poller_create  = iocp_poller_create;
-    iocp_poller_impl.poller_destroy = iocp_poller_destroy;
-    iocp_poller_impl.poller_add     = iocp_poller_add;
-    iocp_poller_impl.poller_mod     = iocp_poller_mod;
-    iocp_poller_impl.poller_del     = iocp_poller_del;
-    iocp_poller_impl.poller_wait    = iocp_poller_wait;
-    iocp_poller_impl.poller_handle  = iocp_poller_handle;
+    _nanoev_poller_impl.poller_create  = iocp_poller_create;
+    _nanoev_poller_impl.poller_destroy = iocp_poller_destroy;
+    _nanoev_poller_impl.poller_add     = iocp_poller_add;
+    _nanoev_poller_impl.poller_mod     = iocp_poller_mod;
+    _nanoev_poller_impl.poller_del     = iocp_poller_del;
+    _nanoev_poller_impl.poller_wait    = iocp_poller_wait;
+    _nanoev_poller_impl.poller_handle  = iocp_poller_handle;
 }
 
 /*----------------------------------------------------------------------------*/

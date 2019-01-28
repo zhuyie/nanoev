@@ -87,6 +87,9 @@ int main(int argc, char* argv[])
     // bind
     nanoev_addr_init(&local_addr, "127.0.0.1", 4000);
     ret_code = nanoev_udp_bind(udp, &local_addr);
+    if (ret_code != NANOEV_SUCCESS) {
+        printf("nanoev_udp_bind return %d, udp_error=%d\n", ret_code, nanoev_udp_error(udp));        
+    }
     ASSERT(ret_code == NANOEV_SUCCESS);
 
     nanoev_now(&tmStart);

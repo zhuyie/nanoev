@@ -75,9 +75,12 @@ typedef struct nanoev_proactor nanoev_proactor;
 
 typedef void (*proactor_callback)(nanoev_proactor *proactor, io_context *ctx);
 
+typedef io_context* (*reactor_event_cb)(SOCKET fd, nanoev_proactor *proactor, int events);
+
 #define NANOEV_PROACTOR_FILEDS                               \
     NANOEV_EVENT_FILEDS                                      \
     proactor_callback callback;                              \
+    reactor_event_cb reactor_cb;                             \
     nanoev_proactor *next;                                   \
 
 struct nanoev_proactor {
