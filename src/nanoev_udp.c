@@ -40,7 +40,7 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
     udp->type = nanoev_event_udp;
     udp->loop = loop;
     udp->userdata = userdata;
-    udp->callback = __udp_proactor_callback;
+    udp->cb = __udp_proactor_callback;
 
     udp->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (INVALID_SOCKET == udp->sock) {
@@ -58,7 +58,7 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
         goto ERROR_EXIT;
     }
 
-    error_code = register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->loop);
+    error_code = register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, _EV_READ, udp->loop);
     if (error_code)
         goto ERROR_EXIT;
 

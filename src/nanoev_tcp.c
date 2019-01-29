@@ -46,7 +46,7 @@ nanoev_event* tcp_new(nanoev_loop *loop, void *userdata)
     tcp->type = nanoev_event_tcp;
     tcp->loop = loop;
     tcp->userdata = userdata;
-    tcp->callback = __tcp_proactor_callback;
+    tcp->cb = __tcp_proactor_callback;
     tcp->sock = INVALID_SOCKET;
 
     return (nanoev_event*)tcp;
@@ -111,7 +111,7 @@ int nanoev_tcp_connect(
         goto ERROR_EXIT;
     }
 
-    error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, tcp->loop);
+    error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, _EV_READ, tcp->loop);
     if (error_code)
         goto ERROR_EXIT;
 
@@ -187,7 +187,7 @@ int nanoev_tcp_listen(
         goto ERROR_EXIT;
     }
 
-    error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, tcp->loop);
+    error_code = register_proactor_to_loop((nanoev_proactor*)tcp, tcp->sock, _EV_READ, tcp->loop);
     if (error_code)
         goto ERROR_EXIT;
 
@@ -650,8 +650,7 @@ nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket)
     if (!tcp)
         return NULL;
 
-    /* Associate the socket with IOCP */
-    if (register_proactor_to_loop((nanoev_proactor*)tcp, socket, loop)) {
+    if (register_proactor_to_loop((nanoev_proactor*)tcp, socket, _EV_READ, loop)) {
         tcp_free((nanoev_event*)tcp);
         return NULL;
     }

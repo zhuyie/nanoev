@@ -30,7 +30,7 @@ nanoev_event* async_new(nanoev_loop *loop, void *userdata)
     async->type = nanoev_event_async;
     async->loop = loop;
     async->userdata = userdata;
-    async->callback = __async_proactor_callback;
+    async->cb = __async_proactor_callback;
 
     return (nanoev_event*)async;
 }

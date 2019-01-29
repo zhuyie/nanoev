@@ -32,26 +32,25 @@ void iocp_poller_destroy(poller p)
     mem_free(_p);
 }
 
-int iocp_poller_add(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
+int iocp_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
 {
+    HANDLE ret;
     _iocp_poller *_p = (_iocp_poller*)p;
     ASSERT(_p->iocp);
 
-    HANDLE ret = CreateIoCompletionPort((HANDLE)fd, _p->iocp, (ULONG_PTR)proactor, 0);
-    return (ret == NULL) ? -1 : 0;
+    ASSERT(events == _EV_READ);
+    ASSERT(proactor->reactor_events == 0);
+
+    ret = CreateIoCompletionPort((HANDLE)fd, _p->iocp, (ULONG_PTR)proactor, 0);
+    if (ret != NULL) {
+        proactor->reactor_events = events;
+        return 0;
+    } else {
+        return -1;
+    }
 }
 
-int iocp_poller_mod(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
-{
-    return 0;
-}
-
-int iocp_poller_del(poller p, SOCKET fd)
-{
-    return 0;
-}
-
-int iocp_poller_wait(poller p, poller_event *events, int max_events, const struct nanoev_timeval *timeout)
+int iocp_poller_poll(poller p, poller_event *events, int max_events, const struct nanoev_timeval *timeout)
 {
     OVERLAPPED_ENTRY overlappeds[128];
     BOOL success;
@@ -132,10 +131,8 @@ void init_iocp_poller_impl()
 {
     _nanoev_poller_impl.poller_create  = iocp_poller_create;
     _nanoev_poller_impl.poller_destroy = iocp_poller_destroy;
-    _nanoev_poller_impl.poller_add     = iocp_poller_add;
-    _nanoev_poller_impl.poller_mod     = iocp_poller_mod;
-    _nanoev_poller_impl.poller_del     = iocp_poller_del;
-    _nanoev_poller_impl.poller_wait    = iocp_poller_wait;
+    _nanoev_poller_impl.poller_modify  = iocp_poller_modify;
+    _nanoev_poller_impl.poller_poll    = iocp_poller_poll;
     _nanoev_poller_impl.poller_handle  = iocp_poller_handle;
 }
 

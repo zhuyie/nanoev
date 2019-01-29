@@ -38,52 +38,15 @@ void kqueue_poller_destroy(poller p)
     mem_free(_p);
 }
 
-int kqueue_poller_add(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
+int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
     ASSERT(_p->kq > 0);
 
-    struct kevent changes[1];
-    EV_SET(&changes[0], fd, EVFILT_READ, EV_ADD, 0, 0, proactor);
-
-    int ret = kevent(_p->kq, changes, 1, NULL, 0, NULL);
-    if (ret != 0) {
-        printf("kqueue_poller_add kevent ret=%d, errno=%d\n", ret, errno);
-    }
     return ret;
 }
 
-int kqueue_poller_mod(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
-{
-    _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
-
-    struct kevent changes[1];
-    EV_SET(&changes[0], fd, EVFILT_READ, EV_ADD, 0, 0, proactor);
-
-    int ret = kevent(_p->kq, changes, 1, NULL, 0, NULL);
-    if (ret != 0) {
-        printf("kqueue_poller_mod kevent ret=%d, errno=%d\n", ret, errno);
-    }
-    return ret;
-}
-
-int kqueue_poller_del(poller p, SOCKET fd)
-{
-    _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
-
-    struct kevent changes[1];
-    EV_SET(&changes[0], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-
-    int ret = kevent(_p->kq, changes, 1, NULL, 0, NULL);
-    if (ret != 0) {
-        printf("kqueue_poller_del kevent ret=%d, errno=%d\n", ret, errno);
-    }
-    return ret;
-}
-
-int kqueue_poller_wait(poller p, poller_event *events, int max_events, const struct nanoev_timeval *timeout)
+int kqueue_poller_poll(poller p, poller_event *events, int max_events, const struct nanoev_timeval *timeout)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
     ASSERT(_p->kq > 0);
@@ -96,10 +59,8 @@ int kqueue_poller_wait(poller p, poller_event *events, int max_events, const str
 poller_impl _nanoev_poller_impl = {
     .poller_create  = kqueue_poller_create,
     .poller_destroy = kqueue_poller_destroy,
-    .poller_add     = kqueue_poller_add,
-    .poller_mod     = kqueue_poller_mod,
-    .poller_del     = kqueue_poller_del,
-    .poller_wait    = kqueue_poller_wait,
+    .poller_modify  = kqueue_poller_modify,
+    .poller_poll    = kqueue_poller_poll,
 };
 
 /*----------------------------------------------------------------------------*/

@@ -75,12 +75,17 @@ typedef struct nanoev_proactor nanoev_proactor;
 
 typedef void (*proactor_callback)(nanoev_proactor *proactor, io_context *ctx);
 
-typedef io_context* (*reactor_event_cb)(SOCKET fd, nanoev_proactor *proactor, int events);
+#define _EV_READ     0x1
+#define _EV_WRITE    0x2
+#define _EV_ERROR    0x80
+
+typedef io_context* (*reactor_event_cb)(nanoev_proactor *proactor, int events);
 
 #define NANOEV_PROACTOR_FILEDS                               \
     NANOEV_EVENT_FILEDS                                      \
-    proactor_callback callback;                              \
+    proactor_callback cb;                                    \
     reactor_event_cb reactor_cb;                             \
+    int reactor_events;                                      \
     nanoev_proactor *next;                                   \
 
 struct nanoev_proactor {
@@ -93,7 +98,7 @@ struct nanoev_proactor {
 #define NANOEV_PROACTOR_FLAG_DELETED    (0x80000000) /* mark for delete */
 
 int  in_loop_thread(nanoev_loop *loop);
-int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loop *loop);
+int  register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, int events, nanoev_loop *loop);
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
 void inc_outstanding_io(nanoev_loop *loop);
 void dec_outstanding_io(nanoev_loop *loop);

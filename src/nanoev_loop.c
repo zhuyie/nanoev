@@ -95,7 +95,7 @@ int nanoev_loop_run(nanoev_loop *loop)
         timers_timeout(&loop->timers, &loop->now, &timeout);
 
         /* waiting I/O events */
-        count = loop->poller_impl_->poller_wait(
+        count = loop->poller_impl_->poller_poll(
             loop->poller_, 
             events, 
             sizeof(events)/sizeof(events[0]), 
@@ -111,7 +111,7 @@ int nanoev_loop_run(nanoev_loop *loop)
                 dec_outstanding_io(loop);
                 goto ON_LOOP_BREAK;
             }
-            events[i].proactor->callback(events[i].proactor, events[i].ctx);
+            events[i].proactor->cb(events[i].proactor, events[i].ctx);
             dec_outstanding_io(loop);
         }
     }
@@ -172,9 +172,9 @@ int in_loop_thread(nanoev_loop *loop)
     return 1;
 }
 
-int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, nanoev_loop *loop)
+int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, int events, nanoev_loop *loop)
 {
-    return loop->poller_impl_->poller_add(loop->poller_, sock, proactor, 0);
+    return loop->poller_impl_->poller_modify(loop->poller_, sock, proactor, events);
 }
 
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
