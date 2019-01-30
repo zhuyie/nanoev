@@ -1,7 +1,13 @@
 #ifndef __NANOEV_H__
 #define __NANOEV_H__
 
-#include <time.h>
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include <winsock2.h>
+#else
+#  include <time.h>
+#endif
 
 /*----------------------------------------------------------------------------*/
 

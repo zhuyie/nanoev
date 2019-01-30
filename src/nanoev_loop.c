@@ -210,9 +210,10 @@ void dec_outstanding_io(nanoev_loop *loop)
 
 void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
+    poller_event event;
+
     inc_outstanding_io(loop);
 
-    poller_event event;
     event.proactor = proactor;
     event.ctx = ctx;
     loop->poller_impl_->poller_submit(loop->poller_, &event);

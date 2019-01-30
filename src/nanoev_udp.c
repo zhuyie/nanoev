@@ -358,6 +358,8 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     }
 }
 
+#ifndef _WIN32
+
 static int do_read(nanoev_udp *udp)
 {
     int ret;
@@ -384,8 +386,11 @@ static int do_write(nanoev_udp *udp)
     }
 }
 
+#endif // !_WIN32
+
 static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 {
+#ifndef _WIN32
     nanoev_udp *udp = (nanoev_udp*)proactor;
 
     if (events == _EV_READ) {
@@ -413,4 +418,8 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
         }
         return &(udp->ctx_write);
     }
+#else
+    ASSERT(!"not reached");
+    return NULL;
+#endif
 }
