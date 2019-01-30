@@ -33,16 +33,16 @@ typedef struct timer_min_heap {
 
 void timers_init(timer_min_heap *heap);
 void timers_term(timer_min_heap *heap);
-void timers_timeout(timer_min_heap *heap, const struct nanoev_timeval *now, struct nanoev_timeval *timeout);
-void timers_process(timer_min_heap *heap, const struct nanoev_timeval *now);
-void timers_adjust_backward(timer_min_heap *heap, const struct nanoev_timeval *off);
+void timers_timeout(timer_min_heap *heap, const nanoev_timeval *now, nanoev_timeval *timeout);
+void timers_process(timer_min_heap *heap, const nanoev_timeval *now);
+void timers_adjust_backward(timer_min_heap *heap, const nanoev_timeval *off);
 
 timer_min_heap* get_loop_timers(nanoev_loop *loop);
 
-void time_now(struct nanoev_timeval *tv);
-void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add);
-void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub);
-int  time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1);
+void time_now(nanoev_timeval *tv);
+void time_add(nanoev_timeval *tv, const nanoev_timeval *add);
+void time_sub(nanoev_timeval *tv, const nanoev_timeval *sub);
+int  time_cmp(const nanoev_timeval *tv0, const nanoev_timeval *tv1);
 
 /*----------------------------------------------------------------------------*/
 

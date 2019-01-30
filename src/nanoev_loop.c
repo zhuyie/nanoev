@@ -11,7 +11,7 @@ struct nanoev_loop {
     void* thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     long outstanding_io_count;
-    struct nanoev_timeval now;
+    nanoev_timeval now;
     timer_min_heap timers;
 };
 
@@ -65,8 +65,9 @@ int nanoev_loop_run(nanoev_loop *loop)
 {
     poller_event events[128];
     int count, i;
-    struct nanoev_timeval timeout;
+    nanoev_timeval timeout;
     int ret_code = NANOEV_SUCCESS;
+    int do_break = 0;
 
     ASSERT(loop);
 
@@ -109,10 +110,14 @@ int nanoev_loop_run(nanoev_loop *loop)
         for (i = 0; i < count; ++i) {
             if (events[i].proactor == loop_break_key) {
                 dec_outstanding_io(loop);
-                goto ON_LOOP_BREAK;
+                do_break = 1;
+            } else {
+                events[i].proactor->cb(events[i].proactor, events[i].ctx);
+                dec_outstanding_io(loop);
             }
-            events[i].proactor->cb(events[i].proactor, events[i].ctx);
-            dec_outstanding_io(loop);
+        }
+        if (do_break) {
+            goto ON_LOOP_BREAK;
         }
     }
 
@@ -126,9 +131,7 @@ ON_LOOP_BREAK:
 void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
-#ifdef _WIN32
     post_fake_io(loop, loop_break_key, NULL);
-#endif
 }
 
 void* nanoev_loop_userdata(nanoev_loop *loop)
@@ -137,7 +140,7 @@ void* nanoev_loop_userdata(nanoev_loop *loop)
     return loop->userdata;
 }
 
-void nanoev_loop_now(nanoev_loop *loop, struct nanoev_timeval *now)
+void nanoev_loop_now(nanoev_loop *loop, nanoev_timeval *now)
 {
     ASSERT(loop);
     ASSERT(now);
@@ -191,7 +194,7 @@ void inc_outstanding_io(nanoev_loop *loop)
 #ifdef _WIN32
     InterlockedIncrement(&loop->outstanding_io_count);
 #else
-    // TODO
+    loop->outstanding_io_count += 1;
 #endif
 }
 
@@ -201,19 +204,18 @@ void dec_outstanding_io(nanoev_loop *loop)
 #ifdef _WIN32
     InterlockedDecrement(&loop->outstanding_io_count);
 #else
-    // TODO
+    loop->outstanding_io_count -= 1;
 #endif
 }
 
 void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
-#ifdef _WIN32
-    HANDLE iocp = (HANDLE)loop->poller_impl_->poller_handle(loop->poller_);
     inc_outstanding_io(loop);
-    PostQueuedCompletionStatus(iocp, 0, (ULONG_PTR)proactor, ctx);
-#else
-    // TODO
-#endif
+
+    poller_event event;
+    event.proactor = proactor;
+    event.ctx = ctx;
+    loop->poller_impl_->poller_submit(loop->poller_, &event);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -271,7 +273,7 @@ static void __process_endgame_proactor(nanoev_loop *loop, int enforcing)
 
 static void __update_time(nanoev_loop *loop)
 {
-    struct nanoev_timeval tv, off;
+    nanoev_timeval tv, off;
 
     nanoev_now(&tv);
 

@@ -1,6 +1,8 @@
 #ifndef __NANOEV_H__
 #define __NANOEV_H__
 
+#include <time.h>
+
 /*----------------------------------------------------------------------------*/
 
 /* return codes */
@@ -20,7 +22,8 @@ void nanoev_term();
 
 struct nanoev_loop;
 typedef struct nanoev_loop nanoev_loop;
-struct nanoev_timeval;
+
+typedef struct timeval nanoev_timeval;
 
 nanoev_loop* nanoev_loop_new(
     void *userdata
@@ -42,7 +45,7 @@ void* nanoev_loop_userdata();
 
 void nanoev_loop_now(
     nanoev_loop *loop,
-    struct nanoev_timeval *now
+    nanoev_timeval *now
     );
 
 /*----------------------------------------------------------------------------*/
@@ -271,13 +274,8 @@ int nanoev_async_pending(
 
 /*----------------------------------------------------------------------------*/
 
-struct nanoev_timeval {
-    unsigned int tv_sec;     /* seconds */
-    unsigned int tv_usec;    /* microseconds */
-};
-
 void nanoev_now(
-    struct nanoev_timeval *now
+    nanoev_timeval *now
     );
 
 typedef void (*nanoev_timer_callback)(
@@ -286,7 +284,7 @@ typedef void (*nanoev_timer_callback)(
 
 int nanoev_timer_add(
     nanoev_event *event,
-    struct nanoev_timeval after,
+    nanoev_timeval after,
     int repeat,
     nanoev_timer_callback callback
     );

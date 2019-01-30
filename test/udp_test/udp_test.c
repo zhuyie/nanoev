@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     int ret_code;
     nanoev_loop *loop;
     nanoev_event *udp;
-    struct nanoev_timeval tmStart, tmEnd;
+    nanoev_timeval tmStart, tmEnd;
     unsigned int duration;
 
     ret_code = nanoev_init();
@@ -84,7 +84,6 @@ int main(int argc, char* argv[])
     udp = nanoev_event_new(nanoev_event_udp, loop, NULL);
     ASSERT(udp);
 
-    // bind
     nanoev_addr_init(&local_addr, "127.0.0.1", 4000);
     ret_code = nanoev_udp_bind(udp, &local_addr);
     if (ret_code != NANOEV_SUCCESS) {

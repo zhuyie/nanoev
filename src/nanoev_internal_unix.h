@@ -15,7 +15,8 @@ typedef int SOCKET;
 #define INVALID_SOCKET (-1)
 
 typedef struct io_context {
-    int reserved;
+    int status;
+    int bytes;
 } io_context;
 
 typedef struct io_buf {

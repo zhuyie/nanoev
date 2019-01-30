@@ -19,12 +19,12 @@ void  mem_free(void *mem)
 
 /*----------------------------------------------------------------------------*/
 
-void nanoev_now(struct nanoev_timeval *tv)
+void nanoev_now(nanoev_timeval *tv)
 {
     time_now(tv);
 }
 
-void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add)
+void time_add(nanoev_timeval *tv, const nanoev_timeval *add)
 {
     tv->tv_sec += add->tv_sec;
     tv->tv_usec += add->tv_usec;
@@ -35,7 +35,7 @@ void time_add(struct nanoev_timeval *tv, const struct nanoev_timeval *add)
     }
 }
 
-void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub)
+void time_sub(nanoev_timeval *tv, const nanoev_timeval *sub)
 {
     ASSERT(tv->tv_sec >= sub->tv_sec);
     tv->tv_sec -= sub->tv_sec;
@@ -49,7 +49,7 @@ void time_sub(struct nanoev_timeval *tv, const struct nanoev_timeval *sub)
     }
 }
 
-int time_cmp(const struct nanoev_timeval *tv0, const struct nanoev_timeval *tv1)
+int time_cmp(const nanoev_timeval *tv0, const nanoev_timeval *tv1)
 {
     if (tv0->tv_sec > tv1->tv_sec) {
         return 1;

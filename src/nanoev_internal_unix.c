@@ -13,9 +13,9 @@ void global_term()
 
 /*----------------------------------------------------------------------------*/
 
-void time_now(struct nanoev_timeval *tv)
+void time_now(nanoev_timeval *tv)
 {
-    gettimeofday((struct timeval*)tv, NULL);
+    gettimeofday(tv, NULL);
 }
 
 /*----------------------------------------------------------------------------*/

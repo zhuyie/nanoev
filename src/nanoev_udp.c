@@ -10,8 +10,9 @@ struct nanoev_udp {
     io_context ctx_write;
     io_buf buf_read;
     io_buf buf_write;
-    struct sockaddr_in from_addr;
     socklen_t from_addr_len;
+    struct sockaddr_in from_addr;
+    struct sockaddr_in to_addr;
     /* callback functions */
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read  on_read;
@@ -19,6 +20,7 @@ struct nanoev_udp {
 typedef struct nanoev_udp nanoev_udp;
 
 static void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
+static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
@@ -41,6 +43,7 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
     udp->loop = loop;
     udp->userdata = userdata;
     udp->cb = __udp_proactor_callback;
+    udp->reactor_cb = reactor_cb;
 
     udp->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (INVALID_SOCKET == udp->sock) {
@@ -136,8 +139,6 @@ int nanoev_udp_read(
         udp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
-#else
-    // TODO
 #endif
 
     inc_outstanding_io(udp->loop);
@@ -190,7 +191,13 @@ int nanoev_udp_write(
         return NANOEV_ERROR_FAIL;
     }
 #else
-    // TODO
+    ASSERT(!(udp->reactor_events & _EV_WRITE));
+    if (0 != register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->reactor_events | _EV_WRITE, udp->loop)) {
+        udp->flags |= NANOEV_UDP_FLAG_ERROR;
+        udp->error_code = errno;
+        return NANOEV_ERROR_FAIL;
+    }
+    memcpy(&(udp->to_addr), &addr, sizeof(addr));
 #endif
 
     inc_outstanding_io(udp->loop);
@@ -310,7 +317,8 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     status = ntstatus_to_winsock_error((long)ctx->Internal);
     bytes = (unsigned int)ctx->InternalHigh;
 #else
-    // TODO
+    status = ctx->status;
+    bytes = ctx->bytes;
 #endif
 
     if (0 != status) {
@@ -335,6 +343,11 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         ASSERT(&udp->ctx_write == ctx);
         ASSERT(udp->flags & NANOEV_UDP_FLAG_WRITING);
 
+#ifndef _WIN32
+        ASSERT(udp->reactor_events & _EV_WRITE);
+        register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->reactor_events & ~_EV_WRITE, udp->loop);
+#endif
+
         udp->flags &= ~NANOEV_UDP_FLAG_WRITING;
         on_write = udp->on_write;
         udp->on_write = NULL;
@@ -342,5 +355,62 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
             ASSERT(on_write);
             on_write((nanoev_event*)udp, status, udp->buf_write.buf, bytes);
         }
+    }
+}
+
+static int do_read(nanoev_udp *udp)
+{
+    int ret;
+    for (;;) {
+        ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
+            (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
+        if (ret == -1 && errno == EINTR) {
+            continue;
+        }
+        return ret;
+    }
+}
+
+static int do_write(nanoev_udp *udp)
+{
+    int ret;
+    for (;;) {
+        ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
+            (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
+        if (ret == -1 && errno == EINTR) {
+            continue;
+        }
+        return ret;
+    }
+}
+
+static io_context* reactor_cb(nanoev_proactor *proactor, int events)
+{
+    nanoev_udp *udp = (nanoev_udp*)proactor;
+
+    if (events == _EV_READ) {
+        int ret = do_read(udp);
+        if (ret > 0) {
+            udp->ctx_read.status = 0;
+            udp->ctx_read.bytes = ret;
+        } else {
+            ASSERT(ret == -1);
+            udp->ctx_read.status = errno;
+            udp->ctx_read.bytes = 0;
+        }
+        return &(udp->ctx_read);
+
+    } else {
+        ASSERT(events == _EV_WRITE);
+        int ret = do_write(udp);
+        if (ret > 0) {
+            udp->ctx_write.status = 0;
+            udp->ctx_write.bytes = ret;
+        } else {
+            ASSERT(ret == -1);
+            udp->ctx_write.status = errno;
+            udp->ctx_write.bytes = 0;
+        }
+        return &(udp->ctx_write);
     }
 }

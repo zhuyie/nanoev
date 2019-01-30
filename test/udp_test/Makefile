@@ -1,5 +1,6 @@
 PROG= udp_test
 
+CFLAGS= -g
 INCLUDES= -I../../include
 
 LIBDIR= -L../../src

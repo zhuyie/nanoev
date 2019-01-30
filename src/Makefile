@@ -1,5 +1,7 @@
 LIB= libnanoev.a
 
+CFLAGS= -g
+
 SOURCES= \
 	nanoev_lib.c \
 	nanoev_event.c \

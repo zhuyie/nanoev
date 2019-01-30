@@ -83,7 +83,7 @@ static void init_win32_ext_fns()
 
 #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
 
-void time_now(struct nanoev_timeval *tv)
+void time_now(nanoev_timeval *tv)
 {
     FILETIME ft;
     unsigned __int64 tmpres = 0;
