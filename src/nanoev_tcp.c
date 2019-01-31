@@ -140,7 +140,6 @@ int nanoev_tcp_connect(
     // TODO
 #endif
 
-    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
     tcp->on_connect = callback;
 
@@ -278,7 +277,6 @@ int nanoev_tcp_accept(
     // TODO
 #endif
 
-    inc_outstanding_io(tcp->loop);
 #ifdef _WIN32    
     tcp->buf_write.buf = (char*)socket_accept;
     tcp->ctx_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
@@ -338,7 +336,6 @@ int nanoev_tcp_write(
     // TODO
 #endif
 
-    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
     tcp->on_write = callback;
 
@@ -387,7 +384,6 @@ int nanoev_tcp_read(
     // TODO
 #endif
 
-    inc_outstanding_io(tcp->loop);
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_read = callback;
 

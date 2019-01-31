@@ -10,7 +10,6 @@ struct nanoev_loop {
     int error_code;                               /* last error code */
     void* thread_id;                              /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
-    long outstanding_io_count;
     nanoev_timeval now;
     timer_min_heap timers;
 };
@@ -81,7 +80,7 @@ int nanoev_loop_run(nanoev_loop *loop)
     /* make sure we have a valid time before enter into the while loop */
     nanoev_now(&loop->now);
 
-    while (loop->timers.size || loop->outstanding_io_count) {
+    while (1) {
         /* update time */
         __update_time(loop);
         
@@ -108,11 +107,9 @@ int nanoev_loop_run(nanoev_loop *loop)
         /* process events */
         for (i = 0; i < count; ++i) {
             if (events[i].proactor == loop_break_key) {
-                dec_outstanding_io(loop);
                 goto ON_LOOP_BREAK;
             } else {
                 events[i].proactor->cb(events[i].proactor, events[i].ctx);
-                dec_outstanding_io(loop);
             }
         }
     }
@@ -184,32 +181,9 @@ void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
     loop->endgame_proactor_listhead = proactor;
 }
 
-void inc_outstanding_io(nanoev_loop *loop)
-{
-    ASSERT(loop->outstanding_io_count >= 0);
-#ifdef _WIN32
-    InterlockedIncrement(&loop->outstanding_io_count);
-#else
-    loop->outstanding_io_count += 1;
-#endif
-}
-
-void dec_outstanding_io(nanoev_loop *loop)
-{
-    ASSERT(loop->outstanding_io_count > 0);
-#ifdef _WIN32
-    InterlockedDecrement(&loop->outstanding_io_count);
-#else
-    loop->outstanding_io_count -= 1;
-#endif
-}
-
 void submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
     poller_event event;
-
-    inc_outstanding_io(loop);
-
     event.proactor = proactor;
     event.ctx = ctx;
     loop->poller_impl_->poller_submit(loop->poller_, &event);

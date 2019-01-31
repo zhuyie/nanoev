@@ -40,7 +40,6 @@ void async_free(nanoev_event *event)
     nanoev_async *async = (nanoev_async*)event;
 
     if (async->started) {
-        dec_outstanding_io(async->loop);
         async->started = 0;
     }
 
@@ -67,7 +66,6 @@ int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
 
     if (!async->started) {
         async->on_async = callback;
-        inc_outstanding_io(async->loop);
         async->started = 1;
         return NANOEV_SUCCESS;
     } else {
