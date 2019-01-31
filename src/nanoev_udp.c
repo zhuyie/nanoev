@@ -12,7 +12,9 @@ struct nanoev_udp {
     io_buf buf_write;
     socklen_t from_addr_len;
     struct sockaddr_in from_addr;
+#ifndef _WIN32
     struct sockaddr_in to_addr;
+#endif
     /* callback functions */
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read  on_read;
@@ -21,6 +23,10 @@ typedef struct nanoev_udp nanoev_udp;
 
 static void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
+
+#ifndef _WIN32
+static int do_write(nanoev_udp *udp);
+#endif
 
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
@@ -61,7 +67,7 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
         goto ERROR_EXIT;
     }
 
-    error_code = register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, _EV_READ, udp->loop);
+    error_code = register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, _EV_READ);
     if (error_code)
         goto ERROR_EXIT;
 
@@ -191,13 +197,25 @@ int nanoev_udp_write(
         return NANOEV_ERROR_FAIL;
     }
 #else
-    ASSERT(!(udp->reactor_events & _EV_WRITE));
-    if (0 != register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->reactor_events | _EV_WRITE, udp->loop)) {
-        udp->flags |= NANOEV_UDP_FLAG_ERROR;
-        udp->error_code = errno;
-        return NANOEV_ERROR_FAIL;
-    }
     memcpy(&(udp->to_addr), &addr, sizeof(addr));
+    int ret = do_write(udp);
+    if (ret > 0) {
+        udp->ctx_write.status = 0;
+        udp->ctx_write.bytes = ret;
+        submit_fake_io(udp->loop, (nanoev_proactor*)udp, &udp->ctx_write);
+    } else {
+        if (errno != EAGAIN) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = errno;
+            return NANOEV_ERROR_FAIL;
+        }
+        ASSERT(!(udp->reactor_events & _EV_WRITE));
+        if (0 != register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, udp->reactor_events | _EV_WRITE)) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = errno;
+            return NANOEV_ERROR_FAIL;
+        }
+    }
 #endif
 
     inc_outstanding_io(udp->loop);
@@ -344,8 +362,9 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         ASSERT(udp->flags & NANOEV_UDP_FLAG_WRITING);
 
 #ifndef _WIN32
-        ASSERT(udp->reactor_events & _EV_WRITE);
-        register_proactor_to_loop((nanoev_proactor*)udp, udp->sock, udp->reactor_events & ~_EV_WRITE, udp->loop);
+        if (udp->reactor_events & _EV_WRITE) {
+            register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, udp->reactor_events & ~_EV_WRITE);
+        }
 #endif
 
         udp->flags &= ~NANOEV_UDP_FLAG_WRITING;

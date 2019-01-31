@@ -127,7 +127,11 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         count1 = max_events;
 
     struct timespec _timeout, *ptimeout;
-    if (timeout->tv_sec != -1) {
+    if (count0 > 0) {
+        _timeout.tv_sec = 0;
+        _timeout.tv_nsec = 0;
+        ptimeout = &_timeout;
+    } else if (timeout->tv_sec != -1) {
         _timeout.tv_sec = timeout->tv_sec;
         _timeout.tv_nsec = timeout->tv_usec * 1000;
         ptimeout = &_timeout;

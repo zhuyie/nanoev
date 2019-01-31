@@ -84,7 +84,7 @@ void nanoev_async_send(nanoev_event *event)
 
 #ifdef _WIN32
     if (0 == InterlockedCompareExchange(&(async->async_sent), 1, 0)) {
-        post_fake_io(async->loop, (nanoev_proactor*)async, &async->ctx);
+        submit_fake_io(async->loop, (nanoev_proactor*)async, &async->ctx);
     }
 #else
     // TODO

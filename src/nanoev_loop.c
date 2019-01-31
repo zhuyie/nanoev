@@ -67,7 +67,6 @@ int nanoev_loop_run(nanoev_loop *loop)
     int count, i;
     nanoev_timeval timeout;
     int ret_code = NANOEV_SUCCESS;
-    int do_break = 0;
 
     ASSERT(loop);
 
@@ -110,14 +109,11 @@ int nanoev_loop_run(nanoev_loop *loop)
         for (i = 0; i < count; ++i) {
             if (events[i].proactor == loop_break_key) {
                 dec_outstanding_io(loop);
-                do_break = 1;
+                goto ON_LOOP_BREAK;
             } else {
                 events[i].proactor->cb(events[i].proactor, events[i].ctx);
                 dec_outstanding_io(loop);
             }
-        }
-        if (do_break) {
-            goto ON_LOOP_BREAK;
         }
     }
 
@@ -131,7 +127,7 @@ ON_LOOP_BREAK:
 void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
-    post_fake_io(loop, loop_break_key, NULL);
+    submit_fake_io(loop, loop_break_key, NULL);
 }
 
 void* nanoev_loop_userdata(nanoev_loop *loop)
@@ -175,7 +171,7 @@ int in_loop_thread(nanoev_loop *loop)
     return 1;
 }
 
-int register_proactor_to_loop(nanoev_proactor *proactor, SOCKET sock, int events, nanoev_loop *loop)
+int register_proactor(nanoev_loop *loop, nanoev_proactor *proactor, SOCKET sock, int events)
 {
     return loop->poller_impl_->poller_modify(loop->poller_, sock, proactor, events);
 }
@@ -208,7 +204,7 @@ void dec_outstanding_io(nanoev_loop *loop)
 #endif
 }
 
-void post_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
+void submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
     poller_event event;
 
