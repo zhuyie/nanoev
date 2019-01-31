@@ -8,7 +8,7 @@ struct nanoev_loop {
     poller_impl *poller_impl_;
     poller poller_;
     int error_code;                               /* last error code */
-    void* thread_id;                              /* thread(ID) which running the loop */
+    thread_t thread_id;                           /* thread(ID) which running the loop */
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     nanoev_timeval now;
     timer_min_heap timers;
@@ -71,11 +71,7 @@ int nanoev_loop_run(nanoev_loop *loop)
 
     /* record the running thread ID */
     ASSERT(loop->thread_id == NULL);
-#ifdef _WIN32
-    loop->thread_id = (void*)GetCurrentThreadId();
-#else
-    // TODO
-#endif
+    loop->thread_id = get_current_thread();
 
     /* make sure we have a valid time before enter into the while loop */
     nanoev_now(&loop->now);
@@ -154,17 +150,9 @@ timer_min_heap* get_loop_timers(nanoev_loop *loop)
 int in_loop_thread(nanoev_loop *loop)
 {
     ASSERT(loop);
-
-    if (loop->thread_id != NULL) {
-#ifdef _WIN32        
-        if ((DWORD)(loop->thread_id) != GetCurrentThreadId()) {
-            return 0;
-        }
-#else
-        // TODO
-#endif
+    if (loop->thread_id != NULL && loop->thread_id != get_current_thread()) {
+        return 0;
     }
-
     return 1;
 }
 

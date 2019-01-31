@@ -104,6 +104,13 @@ void mutex_unlock(mutex *m)
 
 /*----------------------------------------------------------------------------*/
 
+thread_t get_current_thread()
+{
+    return GetCurrentThreadId();
+}
+
+/*----------------------------------------------------------------------------*/
+
 #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
 
 void time_now(nanoev_timeval *tv)

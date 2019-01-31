@@ -35,6 +35,13 @@ void mutex_unlock(mutex *m)
 
 /*----------------------------------------------------------------------------*/
 
+thread_t get_current_thread()
+{
+    return pthread_self();
+}
+
+/*----------------------------------------------------------------------------*/
+
 void time_now(nanoev_timeval *tv)
 {
     gettimeofday(tv, NULL);

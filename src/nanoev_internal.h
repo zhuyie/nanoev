@@ -38,6 +38,16 @@ void mutex_unlock(mutex *m);
 
 /*----------------------------------------------------------------------------*/
 
+#ifdef _WIN32
+# define thread_t DWORD
+#else
+# define thread_t pthread_t
+#endif
+
+thread_t get_current_thread();
+
+/*----------------------------------------------------------------------------*/
+
 typedef struct timer_min_heap {
     nanoev_event **events;
     unsigned int capacity;
