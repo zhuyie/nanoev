@@ -13,6 +13,28 @@ void global_term()
 
 /*----------------------------------------------------------------------------*/
 
+int  mutex_init(mutex *m)
+{
+    return pthread_mutex_init(m, NULL);
+}
+
+void mutex_uninit(mutex *m)
+{
+    pthread_mutex_destroy(m);
+}
+
+void mutex_lock(mutex *m)
+{
+    pthread_mutex_lock(m);
+}
+
+void mutex_unlock(mutex *m)
+{
+    pthread_mutex_unlock(m);
+}
+
+/*----------------------------------------------------------------------------*/
+
 void time_now(nanoev_timeval *tv)
 {
     gettimeofday(tv, NULL);

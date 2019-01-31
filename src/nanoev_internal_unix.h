@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 typedef int SOCKET;
 

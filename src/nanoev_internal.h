@@ -25,6 +25,19 @@ void  mem_free(void *mem);
 
 /*----------------------------------------------------------------------------*/
 
+#ifdef _WIN32
+# define mutex CRITICAL_SECTION
+#else
+# define mutex pthread_mutex_t
+#endif
+
+int  mutex_init(mutex *m);
+void mutex_uninit(mutex *m);
+void mutex_lock(mutex *m);
+void mutex_unlock(mutex *m);
+
+/*----------------------------------------------------------------------------*/
+
 typedef struct timer_min_heap {
     nanoev_event **events;
     unsigned int capacity;

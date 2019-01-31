@@ -81,6 +81,29 @@ static void init_win32_ext_fns()
 
 /*----------------------------------------------------------------------------*/
 
+int  mutex_init(mutex *m)
+{
+    InitializeCriticalSection(m);
+    return 0;
+}
+
+void mutex_uninit(mutex *m)
+{
+    DeleteCriticalSection(m);
+}
+
+void mutex_lock(mutex *m)
+{
+    EnterCriticalSection(m);
+}
+
+void mutex_unlock(mutex *m)
+{
+    LeaveCriticalSection(m);
+}
+
+/*----------------------------------------------------------------------------*/
+
 #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
 
 void time_now(nanoev_timeval *tv)
