@@ -81,7 +81,7 @@ int nanoev_loop_run(nanoev_loop *loop)
     mutex_unlock(&loop->lock);
 
     /* record the running thread ID */
-    ASSERT(loop->thread_id == NULL);
+    ASSERT(loop->thread_id == (thread_t)NULL);
     loop->thread_id = get_current_thread();
 
     /* make sure we have a valid time before enter into the while loop */
@@ -126,7 +126,7 @@ int nanoev_loop_run(nanoev_loop *loop)
     }
 
     /* clear the running thread ID */
-    loop->thread_id = NULL;
+    loop->thread_id = (thread_t)NULL;
 
     return ret_code;
 }
@@ -170,7 +170,7 @@ timer_min_heap* get_loop_timers(nanoev_loop *loop)
 int in_loop_thread(nanoev_loop *loop)
 {
     ASSERT(loop);
-    if (loop->thread_id != NULL && loop->thread_id != get_current_thread()) {
+    if (loop->thread_id != (thread_t)NULL && loop->thread_id != get_current_thread()) {
         return 0;
     }
     return 1;
