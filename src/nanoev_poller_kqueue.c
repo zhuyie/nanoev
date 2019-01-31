@@ -29,6 +29,16 @@ poller kqueue_poller_create()
         return NULL;
     }
 
+    struct kevent kev[1];
+    EV_SET(kev, 1, EVFILT_USER, EV_ADD, 0, 0, NULL);
+    int ret = kevent(p->kq, kev, 1, NULL, 0, NULL);
+    if (ret != 0) {
+        printf("kqueue_poller_create kevent ret=%d,errno=%d\n", ret, errno);
+        close(p->kq);
+        mem_free(p);
+        return NULL;
+    }
+
     p->events = NULL;
     p->events_count = 0;
     p->events_capacity = 0;
@@ -154,6 +164,11 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         ASSERT(proactor);
         ASSERT(proactor->reactor_cb);
 
+        if (_events[i].filter == EVFILT_USER) {
+            ASSERT(_events[i].ident == 1);
+            continue;
+        } 
+        
         io_context *ctx = NULL;
         if (_events[i].filter == EVFILT_READ) {
             ctx = proactor->reactor_cb(proactor, _EV_READ);
@@ -195,6 +210,22 @@ int kqueue_poller_submit(poller p, const poller_event *event)
     return 0;
 }
 
+int kqueue_poller_notify(poller p)
+{
+    _kqueue_poller *_p = (_kqueue_poller*)p;
+    ASSERT(_p->kq > 0);
+
+    struct kevent kev[1];
+    EV_SET(kev, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
+    int ret = kevent(_p->kq, kev, 1, NULL, 0, NULL);
+    if (ret != 0) {
+        printf("kqueue_poller_notify kevent ret=%d,errno=%d\n", ret, errno);
+        return -1;
+    }
+
+    return 0;
+}
+
 /*----------------------------------------------------------------------------*/
 
 poller_impl _nanoev_poller_impl = {
@@ -203,6 +234,7 @@ poller_impl _nanoev_poller_impl = {
     .poller_modify  = kqueue_poller_modify,
     .poller_poll    = kqueue_poller_poll,
     .poller_submit  = kqueue_poller_submit,
+    .poller_notify  = kqueue_poller_notify,
 };
 
 /*----------------------------------------------------------------------------*/

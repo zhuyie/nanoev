@@ -23,6 +23,8 @@ typedef struct poller_impl {
     int (*poller_poll)(poller p, poller_event *events, int max_events, const nanoev_timeval *timeout);
 
     int (*poller_submit)(poller p, const poller_event *event);
+
+    int (*poller_notify)(poller p);
 } poller_impl;
 
 poller_impl* get_poller_impl();

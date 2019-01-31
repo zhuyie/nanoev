@@ -8,6 +8,8 @@ typedef struct _iocp_poller {
     HANDLE iocp;
 } _iocp_poller;
 
+static ULONG_PTR poller_break_key = (ULONG_PTR)-1;
+
 poller iocp_poller_create()
 {
     _iocp_poller *p = (_iocp_poller*)mem_alloc(sizeof(_iocp_poller));
@@ -54,7 +56,7 @@ int iocp_poller_poll(poller p, poller_event *events, int max_events, const nanoe
 {
     OVERLAPPED_ENTRY overlappeds[128];
     BOOL success;
-    DWORD i, count;
+    DWORD i, count, count1;
     unsigned int timeout_in_ms;
     _iocp_poller *_p = (_iocp_poller*)p;
     ASSERT(_p->iocp);
@@ -102,12 +104,17 @@ int iocp_poller_poll(poller p, poller_event *events, int max_events, const nanoe
     }
 
     if (success) {
+        count1 = 0;
         for (i = 0; i < count; ++i) {
             ASSERT(overlappeds[i].lpCompletionKey);
-            events[i].proactor = (nanoev_proactor*)overlappeds[i].lpCompletionKey;
-            events[i].ctx = (io_context*)overlappeds[i].lpOverlapped;
+            if (overlappeds[i].lpCompletionKey == poller_break_key) {
+                continue;
+            }
+            events[count1].proactor = (nanoev_proactor*)overlappeds[i].lpCompletionKey;
+            events[count1].ctx = (io_context*)overlappeds[i].lpOverlapped;
+            count1++;
         }
-        return count;
+        return count1;
     }
 
     if (WAIT_TIMEOUT == GetLastError()) {
@@ -127,6 +134,16 @@ int iocp_poller_submit(poller p, const poller_event *event)
     }
 }
 
+int iocp_poller_notify(poller p)
+{
+    _iocp_poller *_p = (_iocp_poller*)p;
+    if (PostQueuedCompletionStatus(_p->iocp, 0, poller_break_key, NULL)) {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
 /*----------------------------------------------------------------------------*/
 
 poller_impl _nanoev_poller_impl;
@@ -138,6 +155,7 @@ void init_iocp_poller_impl()
     _nanoev_poller_impl.poller_modify  = iocp_poller_modify;
     _nanoev_poller_impl.poller_poll    = iocp_poller_poll;
     _nanoev_poller_impl.poller_submit  = iocp_poller_submit;
+    _nanoev_poller_impl.poller_notify  = iocp_poller_notify;
 }
 
 /*----------------------------------------------------------------------------*/
