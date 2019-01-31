@@ -12,11 +12,13 @@ struct nanoev_loop {
     nanoev_proactor *endgame_proactor_listhead;   /* lazy-delete proactor list */
     nanoev_timeval now;
     timer_min_heap timers;
+
+    mutex lock;
+    int is_break;
 };
 
 static void __process_endgame_proactor(nanoev_loop *loop, int enforcing);
 static void __update_time(nanoev_loop *loop);
-static nanoev_proactor* loop_break_key = (nanoev_proactor*)-1;
 
 /*----------------------------------------------------------------------------*/
 
@@ -43,6 +45,8 @@ nanoev_loop* nanoev_loop_new(void *userdata)
 
     timers_init(&loop->timers);
 
+    mutex_init(&loop->lock);
+
     return loop;
 }
 
@@ -57,6 +61,8 @@ void nanoev_loop_free(nanoev_loop *loop)
 
     timers_term(&loop->timers);
 
+    mutex_uninit(&loop->lock);
+
     mem_free(loop);
 }
 
@@ -68,6 +74,11 @@ int nanoev_loop_run(nanoev_loop *loop)
     int ret_code = NANOEV_SUCCESS;
 
     ASSERT(loop);
+
+    /* reset is_break */
+    mutex_lock(&loop->lock);
+    loop->is_break = 0;
+    mutex_unlock(&loop->lock);
 
     /* record the running thread ID */
     ASSERT(loop->thread_id == NULL);
@@ -102,15 +113,18 @@ int nanoev_loop_run(nanoev_loop *loop)
 
         /* process events */
         for (i = 0; i < count; ++i) {
-            if (events[i].proactor == loop_break_key) {
-                goto ON_LOOP_BREAK;
-            } else {
-                events[i].proactor->cb(events[i].proactor, events[i].ctx);
-            }
+            events[i].proactor->cb(events[i].proactor, events[i].ctx);
         }
+
+        /* check is_break */
+        mutex_lock(&loop->lock);
+        if (loop->is_break) {
+            mutex_unlock(&loop->lock);
+            break;
+        }
+        mutex_unlock(&loop->lock);
     }
 
-ON_LOOP_BREAK:
     /* clear the running thread ID */
     loop->thread_id = NULL;
 
@@ -120,7 +134,13 @@ ON_LOOP_BREAK:
 void nanoev_loop_break(nanoev_loop *loop)
 {
     ASSERT(loop);
-    submit_fake_io(loop, loop_break_key, NULL);
+
+    mutex_lock(&loop->lock);
+    if (!loop->is_break) {
+        loop->is_break = 1;
+        loop->poller_impl_->poller_notify(loop->poller_);
+    }
+    mutex_unlock(&loop->lock);
 }
 
 void* nanoev_loop_userdata(nanoev_loop *loop)
