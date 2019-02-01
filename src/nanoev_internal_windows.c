@@ -147,9 +147,14 @@ const nanoev_win32_ext_fns* get_win32_ext_fns()
 
 /*----------------------------------------------------------------------------*/
 
-int set_non_blocking(SOCKET sock, int blocking)
+int set_non_blocking(SOCKET sock, int set)
 {
-    unsigned long mode = blocking ? 0 : 1;
+    // Set the socket I/O mode: In this case FIONBIO
+    // enables or disables the blocking mode for the 
+    // socket based on the numerical value of iMode.
+    // If iMode = 0, blocking is enabled; 
+    // If iMode != 0, non-blocking mode is enabled.
+    unsigned long mode = set ? 1 : 0;
     return (ioctlsocket(sock, FIONBIO, &mode) == 0) ? 1 : 0;
 }
 
