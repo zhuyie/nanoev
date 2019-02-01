@@ -270,11 +270,7 @@ int nanoev_async_start(
     nanoev_async_callback callback
     );
 
-void nanoev_async_send(
-    nanoev_event *event
-    );
-
-int nanoev_async_pending(
+int nanoev_async_send(
     nanoev_event *event
     );
 

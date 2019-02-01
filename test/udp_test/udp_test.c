@@ -6,10 +6,26 @@
 #define ASSERT assert
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
 #else
+# include <signal.h>
+#endif
 
+static nanoev_event *async_for_ctrl_c;
+#ifdef _WIN32
+static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
+{
+    ASSERT(async_for_ctrl_c);
+    nanoev_async_send(async_for_ctrl_c);
+    return TRUE;
+}
+#else
+static void sigint_handler(int sig)
+{
+    ASSERT(async_for_ctrl_c);
+    nanoev_async_send(async_for_ctrl_c);
+}
 #endif
 
 struct nanoev_addr local_addr;
@@ -64,14 +80,24 @@ void on_write(
         int ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
         ASSERT(ret_code == NANOEV_SUCCESS);
     } else {
-        nanoev_loop_break(nanoev_event_loop(udp));
+        int ret_code = nanoev_async_send(async_for_ctrl_c);
+        ASSERT(ret_code == NANOEV_SUCCESS);
     }
+}
+
+static void on_async(
+    nanoev_event *async
+    )
+{
+    nanoev_loop *loop = nanoev_event_loop(async);
+    nanoev_loop_break(loop);
 }
 
 int main(int argc, char* argv[])
 {
     int ret_code;
     nanoev_loop *loop;
+    nanoev_event *async;
     nanoev_event *udp;
     nanoev_timeval tmStart, tmEnd;
     unsigned int duration;
@@ -80,6 +106,9 @@ int main(int argc, char* argv[])
     ASSERT(ret_code == NANOEV_SUCCESS);
     loop = nanoev_loop_new(NULL);
     ASSERT(loop);
+
+    async = nanoev_event_new(nanoev_event_async, loop, NULL);
+    ASSERT(async);
 
     udp = nanoev_event_new(nanoev_event_udp, loop, NULL);
     ASSERT(udp);
@@ -99,6 +128,15 @@ int main(int argc, char* argv[])
     nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
     ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
     ASSERT(ret_code == NANOEV_SUCCESS);
+
+    nanoev_async_start(async, on_async);
+    async_for_ctrl_c = async;
+#ifdef _WIN32
+    SetConsoleCtrlHandler(CtrlCHandler, TRUE);
+#else
+    signal(SIGINT, sigint_handler);
+#endif
+    printf("Press Ctrl+C to break...\n");
 
     nanoev_loop_run(loop);
 
