@@ -16,15 +16,19 @@ static nanoev_event *async_for_ctrl_c;
 #ifdef _WIN32
 static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
 {
+    int ret;
     ASSERT(async_for_ctrl_c);
-    nanoev_async_send(async_for_ctrl_c);
+    ret = nanoev_async_send(async_for_ctrl_c);
+    ASSERT(ret == NANOEV_SUCCESS);
     return TRUE;
 }
 #else
 static void sigint_handler(int sig)
 {
+    int ret;
     ASSERT(async_for_ctrl_c);
-    nanoev_async_send(async_for_ctrl_c);
+    ret = nanoev_async_send(async_for_ctrl_c);
+    ASSERT(ret == NANOEV_SUCCESS);
 }
 #endif
 
@@ -129,7 +133,8 @@ int main(int argc, char* argv[])
     ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    nanoev_async_start(async, on_async);
+    ret_code = nanoev_async_start(async, on_async);
+    ASSERT(ret_code == NANOEV_SUCCESS);
     async_for_ctrl_c = async;
 #ifdef _WIN32
     SetConsoleCtrlHandler(CtrlCHandler, TRUE);

@@ -126,12 +126,7 @@ int iocp_poller_poll(poller p, poller_event *events, int max_events, const nanoe
 
 int iocp_poller_submit(poller p, const poller_event *event)
 {
-    _iocp_poller *_p = (_iocp_poller*)p;
-    if (PostQueuedCompletionStatus(_p->iocp, 0, (ULONG_PTR)event->proactor, event->ctx)) {
-        return 0;
-    } else {
-        return -1;
-    }
+    return -1;
 }
 
 int iocp_poller_notify(poller p)

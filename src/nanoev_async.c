@@ -19,6 +19,7 @@ struct nanoev_async {
     int started;
     pipe_handle pipe_r;
     pipe_handle pipe_w;
+    char pipe_read_buf;
 
     mutex lock;
     int async_sent;
@@ -80,7 +81,6 @@ void async_free(nanoev_event *event)
 
 int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
 {
-    int ret;
     nanoev_async *async = (nanoev_async*)event;
 
     ASSERT(async);
@@ -95,7 +95,14 @@ int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
     ASSERT(async->pipe_r == INVALID_PIPE);
     ASSERT(async->pipe_w == INVALID_PIPE);
 #ifdef _WIN32
-    // TODO
+    if (!CreatePipeEx(&async->pipe_r, &async->pipe_w, NULL, 0, FILE_FLAG_OVERLAPPED, FILE_FLAG_OVERLAPPED)) {
+        return NANOEV_ERROR_FAIL;
+    }
+    if (register_proactor(async->loop, (nanoev_proactor*)async, (SOCKET)async->pipe_r, _EV_READ)) {
+        close_pipe(async->pipe_r);  async->pipe_r = INVALID_PIPE;
+        close_pipe(async->pipe_w);  async->pipe_w = INVALID_PIPE;
+        return NANOEV_ERROR_FAIL;
+    }
 #else
     int fildes[2] = { 0 };
     if (pipe(fildes)) {
@@ -123,6 +130,10 @@ int nanoev_async_send(nanoev_event *event)
 {
     int ret;
     nanoev_async *async = (nanoev_async*)event;
+    char buf[1] = { 0 };
+#ifdef _WIN32
+    DWORD cbWritten;
+#endif
 
     ASSERT(async);
     ASSERT(!(async->flags & NANOEV_ASYNC_FLAG_DELETED));
@@ -137,9 +148,15 @@ int nanoev_async_send(nanoev_event *event)
     /* still holding the lock... */
 
 #ifdef _WIN32
-    // TODO
+    if (ReadFile(async->pipe_r, &async->pipe_read_buf, 1, NULL, &async->ctx) || GetLastError() != ERROR_IO_PENDING) {
+        ret = NANOEV_ERROR_FAIL;
+        goto my_exit;
+    }
+    if (!WriteFile(async->pipe_w, buf, 1, &cbWritten, NULL)) {
+        ret = NANOEV_ERROR_FAIL;
+        goto my_exit;
+    }
 #else
-    char buf[1] = { 0 };
     if (1 != write(async->pipe_w, buf, 1)) {
         ret = NANOEV_ERROR_FAIL;
         goto my_exit;

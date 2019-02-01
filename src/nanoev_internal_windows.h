@@ -59,6 +59,15 @@ const nanoev_win32_ext_fns* get_win32_ext_fns();
 
 int  ntstatus_to_winsock_error(long status);
 
+BOOL CreatePipeEx(
+    LPHANDLE lpReadPipe,
+    LPHANDLE lpWritePipe,
+    LPSECURITY_ATTRIBUTES lpPipeAttributes,
+    DWORD nSize,
+    DWORD dwReadMode,
+    DWORD dwWriteMode
+    );
+
 /*----------------------------------------------------------------------------*/
 
 #endif /* __NANOEV_INTERNAL_WINDOWS_H__ */
