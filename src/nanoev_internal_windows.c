@@ -363,7 +363,7 @@ Return Value:
     sprintf(PipeNameBuffer,
         "\\\\.\\Pipe\\nanoev.%08x.%08x",
         GetCurrentProcessId(),
-        PipeSerialNumber++
+        InterlockedIncrement(&PipeSerialNumber)
         );
 
     ReadPipeHandle = CreateNamedPipeA(
