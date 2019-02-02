@@ -6,8 +6,12 @@
 #include <assert.h>
 #define ASSERT assert
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#ifdef _WIN32
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#else
+# include <signal.h>
+#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -39,7 +43,7 @@ static client* client_new(nanoev_loop *loop);
 static void client_free(client *c);
 static int ensure_in_buf(client *c, unsigned int capacity);
 static int get_remain_size(client *c);
-static int write_to_buf(client *c, const char *msg);
+static int write_to_buf(client *c, const unsigned char *msg);
 
 static void on_accept(
     nanoev_event *tcp, 
@@ -72,12 +76,24 @@ static void on_timer(
 /*----------------------------------------------------------------------------*/
 
 static nanoev_event *async_for_ctrl_c;
+#ifdef _WIN32
 static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
 {
+    int ret;
     ASSERT(async_for_ctrl_c);
-    nanoev_async_send(async_for_ctrl_c);
+    ret = nanoev_async_send(async_for_ctrl_c);
+    ASSERT(ret == NANOEV_SUCCESS);
     return TRUE;
 }
+#else
+static void sigint_handler(int sig)
+{
+    int ret;
+    ASSERT(async_for_ctrl_c);
+    ret = nanoev_async_send(async_for_ctrl_c);
+    ASSERT(ret == NANOEV_SUCCESS);
+}
+#endif
 
 typedef struct {
     nanoev_loop *loop;
@@ -118,7 +134,11 @@ int main(int argc, char* argv[])
 
     nanoev_async_start(async, on_async);
     async_for_ctrl_c = async;
+#ifdef _WIN32
     SetConsoleCtrlHandler(CtrlCHandler, TRUE);
+#else
+    signal(SIGINT, sigint_handler);
+#endif
     printf("Press Ctrl+C to break...\n");
 
     ret_code = nanoev_loop_run(loop);
@@ -187,9 +207,9 @@ static int get_remain_size(client *c)
     return total - c->in_buf_size;
 }
 
-static int write_to_buf(client *c, const char *msg)
+static int write_to_buf(client *c, const unsigned char *msg)
 {
-    unsigned int len = (unsigned int)strlen(msg) + 1;
+    unsigned int len = (unsigned int)strlen((const char*)msg) + 1;
 
     unsigned int required_cb = sizeof(unsigned int) + len;
     if (c->out_buf_capacity < required_cb) {
@@ -219,7 +239,7 @@ static void on_accept(
     char ip[16];
     unsigned short port;
     client *c;
-    struct nanoev_timeval after; 
+    nanoev_timeval after; 
     int ret_code;
 
     if (status) {
@@ -242,7 +262,6 @@ static void on_accept(
     nanoev_addr_get_port(&addr, &port);
     printf("Client %s:%d connected\n", ip, (int)port);
 
-    /* 分配初始in_buf，发起一个读操作 */
     ret_code = ensure_in_buf(c, 100);
     if (ret_code) {
         printf("ensure_in_buf failed\n");
@@ -269,7 +288,6 @@ ON_ACCEPT_ERROR:
         client_free(c);
     }
 
-    /* 继续accept下一个client */
     ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_accept failed, code = %u\n", ret_code);
@@ -301,7 +319,7 @@ static void on_write(
     )
 {
     client *c;
-    struct nanoev_timeval after;
+    nanoev_timeval after;
     int ret_code;
 
     c = (client*)nanoev_event_userdata(tcp);
@@ -318,7 +336,6 @@ static void on_write(
     c->out_buf_sent += bytes;
 
     if (c->out_buf_sent < c->out_buf_size) {
-        /* 继续发送剩余的数据 */
         ret_code = nanoev_tcp_write(tcp, c->out_buf + c->out_buf_sent, c->out_buf_size - c->out_buf_sent, on_write);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
@@ -333,7 +350,6 @@ static void on_write(
         }
 
     } else {
-        /* 开始接收下一个request */
         c->in_buf_size = 0;
         c->out_buf_size = 0;
         c->out_buf_sent = 0;
@@ -369,7 +385,7 @@ static void on_read(
     )
 {
     client *c;
-    struct nanoev_timeval after;
+    nanoev_timeval after;
     int ret_code;
 
     c = (client*)nanoev_event_userdata(tcp);
@@ -392,7 +408,6 @@ static void on_read(
 
     bytes = get_remain_size(c);
     if (bytes > 0) {
-        /* 继续接收剩余的request */
         ret_code = ensure_in_buf(c, c->in_buf_size + bytes);
         if (ret_code != 0) {
             printf("ensure_buf failed\n");
@@ -412,7 +427,6 @@ static void on_read(
         }
 
     } else {
-        /* 这个request的数据完整了，生成response */
         ASSERT(c->in_buf);
         ASSERT(c->in_buf_size);
         ret_code = write_to_buf(c, c->in_buf + sizeof(unsigned int));
@@ -421,7 +435,6 @@ static void on_read(
             return;
         }
 
-        /* 开始发送response */
         c->out_buf_sent = 0;
         ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, on_write);
         if (ret_code != NANOEV_SUCCESS) {

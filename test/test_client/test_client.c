@@ -215,7 +215,6 @@ static void on_write(
     c->out_buf_sent += bytes;
 
     if (c->out_buf_sent < c->out_buf_size) {
-        /* 继续发送剩余的数据 */
         ret_code = nanoev_tcp_write(tcp, c->out_buf + c->out_buf_sent, c->out_buf_size - c->out_buf_sent, on_write);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
@@ -223,7 +222,6 @@ static void on_write(
         }
 
     } else {
-        /* 开始接收响应 */
         c->in_buf_size = 0;
         ret_code = ensure_in_buf(c, 100);
         if (ret_code != 0) {
@@ -267,7 +265,6 @@ static void on_read(
 
     bytes = get_remain_size(c);
     if (bytes > 0) {
-        /* 继续接收剩余的response */
         ret_code = ensure_in_buf(c, c->in_buf_size + bytes);
         if (ret_code != 0) {
             printf("ensure_in_buf failed\n");
@@ -280,14 +277,12 @@ static void on_read(
         }
 
     } else {
-        /* 这个response的数据完整了 */
         ASSERT(c->in_buf);
         ASSERT(c->in_buf_size);
         printf("Server return %u bytes : %s\n", c->in_buf_size, c->in_buf + sizeof(unsigned int));
         
         --times;
         if (times > 0) {
-            /* 继续发送下一个request */
             c->out_buf_sent = 0;
             ret_code = write_to_buf(c, out_msg);
             if (ret_code != 0) {
