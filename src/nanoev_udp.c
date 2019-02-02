@@ -24,10 +24,6 @@ typedef struct nanoev_udp nanoev_udp;
 static void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 
-#ifndef _WIN32
-static int do_write(nanoev_udp *udp);
-#endif
-
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
 #define NANOEV_UDP_FLAG_ERROR        NANOEV_PROACTOR_FLAG_ERROR
@@ -197,7 +193,8 @@ int nanoev_udp_write(
     }
 #else
     memcpy(&(udp->to_addr), &addr, sizeof(addr));
-    int ret = do_write(udp);
+    int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
+        (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
     if (ret > 0) {
         udp->ctx_write.status = 0;
         udp->ctx_write.bytes = ret;
@@ -375,43 +372,14 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     }
 }
 
-#ifndef _WIN32
-
-static int do_read(nanoev_udp *udp)
-{
-    int ret;
-    for (;;) {
-        ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
-            (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
-        if (ret == -1 && errno == EINTR) {
-            continue;
-        }
-        return ret;
-    }
-}
-
-static int do_write(nanoev_udp *udp)
-{
-    int ret;
-    for (;;) {
-        ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
-            (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
-        if (ret == -1 && errno == EINTR) {
-            continue;
-        }
-        return ret;
-    }
-}
-
-#endif // !_WIN32
-
 static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 {
 #ifndef _WIN32
     nanoev_udp *udp = (nanoev_udp*)proactor;
 
     if (events == _EV_READ) {
-        int ret = do_read(udp);
+        int ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
+            (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
         if (ret > 0) {
             udp->ctx_read.status = 0;
             udp->ctx_read.bytes = ret;
@@ -424,7 +392,8 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 
     } else {
         ASSERT(events == _EV_WRITE);
-        int ret = do_write(udp);
+        int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
+            (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
         if (ret > 0) {
             udp->ctx_write.status = 0;
             udp->ctx_write.bytes = ret;
