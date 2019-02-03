@@ -14,7 +14,8 @@ SOURCES= \
 	nanoev_loop.c \
 	nanoev_poller.c \
 	nanoev_poller_iocp.c \
-	nanoev_poller_kqueue.c
+	nanoev_poller_kqueue.c \
+	nanoev_poller_epoll.c
 
 OBJECTS= $(subst .c,.o,$(SOURCES))
 
