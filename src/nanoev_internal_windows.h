@@ -68,6 +68,8 @@ BOOL CreatePipeEx(
     DWORD dwWriteMode
     );
 
+#define ENOMEM WSAENOBUFS
+
 /*----------------------------------------------------------------------------*/
 
 #endif /* __NANOEV_INTERNAL_WINDOWS_H__ */

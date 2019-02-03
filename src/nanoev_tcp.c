@@ -120,7 +120,7 @@ int nanoev_tcp_connect(
     remote_addr.sin_port = server_addr->port;
 
 #ifdef _WIN32
-    error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, 0);
+    error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, _EV_READ);
     if (error_code)
         goto ERROR_EXIT;
 
