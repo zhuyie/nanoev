@@ -154,8 +154,12 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         //printf("kqueue_poller_poll kevent ret=0\n");
         return count0;
     } else if (ret < 0) {
-        printf("kqueue_poller_poll kevent ret=%d,errno=%d\n", ret, errno);
-        return -1;
+        if (errno != EINTR) {
+            printf("kqueue_poller_poll kevent ret=%d,errno=%d\n", ret, errno);
+            return -1;
+        } else {
+            return count0;
+        }
     }
 
     count1 = 0;
