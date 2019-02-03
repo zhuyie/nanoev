@@ -47,7 +47,9 @@ nanoev_event* async_new(nanoev_loop *loop, void *userdata)
     async->loop = loop;
     async->userdata = userdata;
     async->cb = __async_proactor_callback;
+#ifndef _WIN32
     async->reactor_cb = reactor_cb;
+#endif
 
     mutex_init(&async->lock);
 
@@ -189,9 +191,9 @@ void __async_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     }
 }
 
+#ifndef _WIN32
 static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 {
-#ifndef _WIN32
     nanoev_async *async = (nanoev_async*)proactor;
     ASSERT(events == _EV_READ);
 
@@ -206,8 +208,5 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
         async->ctx.bytes = 0;
     }
     return &(async->ctx);
-#else
-    ASSERT(!"not reached");
-    return NULL;
-#endif
 }
+#endif

@@ -24,6 +24,7 @@ typedef struct nanoev_tcp nanoev_tcp;
 
 static void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket);
+static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 
 #define NANOEV_TCP_FLAG_CONNECTED    (0x00000001)      /* connection established */
 #define NANOEV_TCP_FLAG_LISTENING    (0x00000002)      /* listening */
@@ -47,6 +48,9 @@ nanoev_event* tcp_new(nanoev_loop *loop, void *userdata)
     tcp->loop = loop;
     tcp->userdata = userdata;
     tcp->cb = __tcp_proactor_callback;
+#ifndef _WIN32
+    tcp->reactor_cb = reactor_cb;
+#endif
     tcp->sock = INVALID_SOCKET;
 
     return (nanoev_event*)tcp;
@@ -111,11 +115,15 @@ int nanoev_tcp_connect(
         goto ERROR_EXIT;
     }
 
-    error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, _EV_READ);
+    remote_addr.sin_family = AF_INET;
+    remote_addr.sin_addr.s_addr = server_addr->ip;
+    remote_addr.sin_port = server_addr->port;
+
+#ifdef _WIN32
+    error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, 0);
     if (error_code)
         goto ERROR_EXIT;
 
-#ifdef _WIN32
     /* We have to call bind(...), or ConnectEx will failed with WSAEINVAL... */
     local_addr.sin_family = AF_INET;
     local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -126,9 +134,6 @@ int nanoev_tcp_connect(
     }
 
     /* Call ConnectEx */
-    remote_addr.sin_family = AF_INET;
-    remote_addr.sin_addr.s_addr = server_addr->ip;
-    remote_addr.sin_port = server_addr->port;
     if (!get_winsock_ext()->ConnectEx(tcp->sock, (const struct sockaddr*)&remote_addr, 
             sizeof(remote_addr), NULL, 0, NULL, &tcp->ctx_write)
          && ERROR_IO_PENDING != WSAGetLastError()
@@ -137,7 +142,22 @@ int nanoev_tcp_connect(
         goto ERROR_EXIT;
     }
 #else
-    // TODO
+    int ret = connect(tcp->sock, (const struct sockaddr*)&remote_addr, sizeof(remote_addr));
+    if (ret == 0) {
+        tcp->ctx_write.status = 0;
+        tcp->ctx_write.bytes = 0;
+        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write);
+    } else {
+        if (errno != EINPROGRESS) {
+            error_code = errno;
+            goto ERROR_EXIT;
+        }
+        ASSERT(!(tcp->reactor_events & _EV_WRITE));
+        if (0 != register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, tcp->reactor_events | _EV_WRITE)) {
+            error_code = errno;
+            goto ERROR_EXIT;
+        }
+    }
 #endif
 
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
@@ -273,14 +293,26 @@ int nanoev_tcp_accept(
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
+
+    tcp->buf_write.buf = (char*)socket_accept;  /* Tricky */
 #else
-    // TODO
+    int fd = accept(tcp->sock, NULL, NULL);
+    if (fd > 0) {
+        tcp->ctx_read.status = 0;
+        tcp->ctx_read.bytes = fd;
+        tcp->buf_write.buf = (char*)(uintptr_t)fd;  /* Tricky */
+        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_read);
+    } else {
+        ASSERT(fd == -1);
+        if (errno != EWOULDBLOCK) {
+            error_code = errno;
+            goto ERROR_EXIT;
+        }
+    }
 #endif
 
-#ifdef _WIN32    
-    tcp->buf_write.buf = (char*)socket_accept;
-    tcp->ctx_write.Internal = (ULONG_PTR)alloc_userdata;  /* Tricky */
-#endif
+    tcp->buf_read.buf = (char*)alloc_userdata;  /* Tricky */
+
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_accept = callback;
 
@@ -333,7 +365,18 @@ int nanoev_tcp_write(
         return NANOEV_ERROR_FAIL;
     }
 #else
-    // TODO
+    int ret = write(tcp->sock, buf, len);
+    if (ret > 0) {
+        tcp->ctx_write.status = 0;
+        tcp->ctx_write.bytes = ret;
+        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write);
+    } else {
+        if (errno != EAGAIN) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = errno;
+            return NANOEV_ERROR_FAIL;
+        }
+    }
 #endif
 
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
@@ -380,8 +423,6 @@ int nanoev_tcp_read(
         tcp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
-#else
-    // TODO
 #endif
 
     tcp->flags |= NANOEV_TCP_FLAG_READING;
@@ -516,7 +557,16 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     status = ntstatus_to_winsock_error((long)ctx->Internal);
     bytes = (unsigned int)ctx->InternalHigh;
 #else
-    // TODO
+    status = ctx->status;
+    bytes = ctx->bytes;
+#endif
+
+#ifndef _WIN32
+    if (&tcp->ctx_write == ctx) {
+        if (tcp->reactor_events & _EV_WRITE) {
+            register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, tcp->reactor_events & ~_EV_WRITE);
+        }
+    }
 #endif
 
     if (0 != status) {
@@ -525,7 +575,6 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     }
 
     if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
-
         if (&tcp->ctx_read == ctx) {
             /* a recv operation is completed */
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
@@ -551,7 +600,6 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         }
 
 	} else {
-#ifdef _WIN32
         if (tcp->flags & NANOEV_TCP_FLAG_LISTENING) {
             /* an accept operation is completed */
             ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
@@ -560,17 +608,17 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
             on_accept = tcp->on_accept;
             tcp->on_accept = NULL;
 
-            socket_accept = (SOCKET)tcp->buf_write.buf;
-            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->ctx_write.Internal;  /* Tricky */
+            socket_accept = (SOCKET)tcp->buf_write.buf; /* Tricky */
+            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->buf_read.buf;  /* Tricky */
             tcp_new = NULL;
             userdata_new = NULL;
 
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
-
-                if (status) {
+                if (0 != status) {
                     goto ON_ACCEPT_ERROR;
                 }
 
+            #ifdef _WIN32
                 /**
                    When the AcceptEx function returns, the socket sAcceptSocket is in the default state
                    for a connected socket. The socket sAcceptSocket does not inherit the properties of the socket 
@@ -579,25 +627,28 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
                 ret_code = setsockopt(socket_accept, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, 
                     (char*)&tcp->sock, sizeof(tcp->sock));
                 ASSERT(0 == ret_code);
+            #endif
 
                 /* alloc userdata */
                 if (alloc_userdata
                     && !(userdata_new = alloc_userdata(tcp->userdata, NULL))
                     ) {
-                    status = WSAENOBUFS;
+                    status = ENOMEM;
                     goto ON_ACCEPT_ERROR;
                 }
 
                 /* alloc a new tcp object */
                 tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
                 if (!tcp_new) {
-                    status = WSAENOBUFS;
+                    status = ENOMEM;
                     goto ON_ACCEPT_ERROR;
                 }
 
-ON_ACCEPT_ERROR:
-                if (status) {
-                    closesocket(socket_accept);
+            ON_ACCEPT_ERROR:
+                if (0 != status) {
+                    if (socket_accept != INVALID_SOCKET) {
+                        close_socket(socket_accept);
+                    }
                     if (userdata_new) {
                         alloc_userdata(tcp->userdata, userdata_new);  /* free userdata */
                     }
@@ -607,7 +658,9 @@ ON_ACCEPT_ERROR:
                 on_accept((nanoev_event*)tcp, status, (nanoev_event*)tcp_new);
 
             } else {
-                closesocket(socket_accept);
+                if (socket_accept != INVALID_SOCKET) {
+                    close_socket(socket_accept);
+                }
             }
 
         } else {
@@ -621,6 +674,8 @@ ON_ACCEPT_ERROR:
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
                 if (0 == status) {
                     tcp->flags |= NANOEV_TCP_FLAG_CONNECTED;
+
+                #ifdef _WIN32                    
                     /**
                        When the ConnectEx function returns, the socket s is in the default state
                        for a connected socket. The socket s does not enable previously set properties 
@@ -628,15 +683,16 @@ ON_ACCEPT_ERROR:
                      */
                     ret_code = setsockopt(tcp->sock, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
                     ASSERT(0 == ret_code);
+                #else
+                    /* register _EV_READ */
+                    register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, tcp->reactor_events | _EV_READ);
+                #endif
                 }
 
                 ASSERT(on_connect);
                 on_connect((nanoev_event*)tcp, status);
             }
         }
-#else
-    // TODO
-#endif
     }
 }
 
@@ -656,3 +712,79 @@ nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket)
     
     return tcp;
 }
+
+
+#ifndef _WIN32
+static io_context* reactor_cb(nanoev_proactor *proactor, int events)
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)proactor;
+
+    if (events == _EV_READ) {
+        if (!(tcp->flags & NANOEV_TCP_FLAG_READING)) {
+            return NULL;
+        }
+
+        if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
+            /* read */
+            int ret = read(tcp->sock, tcp->buf_read.buf, tcp->buf_read.len);
+            if (ret >= 0) {
+                tcp->ctx_read.status = 0;
+                tcp->ctx_read.bytes = ret;
+            } else {
+                ASSERT(ret == -1);
+                tcp->ctx_read.status = errno;
+                tcp->ctx_read.bytes = 0;
+            }
+            return &(tcp->ctx_read);
+
+        } else {
+            /* accept */
+            int fd = accept(tcp->sock, NULL, NULL);
+            if (fd > 0) {
+                tcp->ctx_read.status = 0;
+                tcp->ctx_read.bytes = 0;
+                tcp->buf_write.buf = (char*)(uintptr_t)fd;  /* Tricky */
+            } else {
+                ASSERT(fd == -1);
+                tcp->ctx_read.status = errno;
+                tcp->ctx_read.bytes = 0;
+                tcp->buf_write.buf = (char*)(uintptr_t)0;  /* Tricky */
+            }
+            return &(tcp->ctx_read);
+        }
+
+    } else {
+        ASSERT(events == _EV_WRITE);
+        if (!(tcp->flags & NANOEV_TCP_FLAG_WRITING)) {
+            return NULL;
+        }
+
+        if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
+            /* write */
+            int ret = write(tcp->sock, tcp->buf_write.buf, tcp->buf_write.len);
+            if (ret > 0) {
+                tcp->ctx_write.status = 0;
+                tcp->ctx_write.bytes = ret;
+            } else {
+                ASSERT(ret == -1);
+                tcp->ctx_write.status = errno;
+                tcp->ctx_write.bytes = 0;
+            }
+            return &(tcp->ctx_write);
+
+        } else {
+            /* connect */
+            int result;
+            socklen_t result_len = sizeof(result);
+            if (getsockopt(tcp->sock, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
+                tcp->ctx_write.status = errno;
+                tcp->ctx_write.bytes = 0;
+                return &(tcp->ctx_write);
+            }
+            tcp->ctx_write.status = result;
+            tcp->ctx_write.bytes = 0;
+            return &(tcp->ctx_write);
+        }
+    }
+}
+#endif

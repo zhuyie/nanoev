@@ -64,7 +64,7 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
 
     int reactor_events = proactor->reactor_events;
     if (reactor_events == events) {
-	    printf("kqueue_poller_modify fd=%d,events=%d no change\n", fd, reactor_events);
+	    //printf("kqueue_poller_modify fd=%d,events=%d no change\n", fd, reactor_events);
         return 0;
     }
 
