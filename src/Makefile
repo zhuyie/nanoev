@@ -1,6 +1,14 @@
 LIB= libnanoev.a
 
-CFLAGS= -g
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	LIBTOOL= ar rcs
+endif
+ifeq ($(UNAME_S),Darwin)
+	LIBTOOL= libtool -static -o
+endif
+
+CFLAGS= -g -std=c99
 
 SOURCES= \
 	nanoev_lib.c \
@@ -20,7 +28,7 @@ SOURCES= \
 OBJECTS= $(subst .c,.o,$(SOURCES))
 
 $(LIB): $(OBJECTS)
-	libtool -static -o $@ $^
+	$(LIBTOOL) $@ $^
 	
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<

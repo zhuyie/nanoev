@@ -33,7 +33,7 @@ poller epoll_poller_create()
         struct epoll_event event;
         event.data.fd = p->notifyfd;
         event.events = EPOLLIN;
-        if (!epoll_ctl(_p->epd, op, p->notifyfd, &event)) {
+        if (epoll_ctl(p->epd, EPOLL_CTL_ADD, p->notifyfd, &event)) {
             close(p->notifyfd);
             p->notifyfd = -1;
         }
@@ -84,7 +84,7 @@ int epoll_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int even
         event.events |= EPOLLOUT;
     }
 
-    if (reactor_events == 0) {
+    if (proactor->reactor_events == 0) {
         op = EPOLL_CTL_ADD;
     } else if (events == 0) {
         op = EPOLL_CTL_DEL;
@@ -171,11 +171,12 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
             ctx = proactor->reactor_cb(proactor, _EV_WRITE);
         }
         if (ctx != NULL) {
+            //printf("[%d] epoll_poller_poll events=0x%08x\n", getpid(), _events[i].events);
             events[count1].proactor = proactor;
             events[count1].ctx = ctx;
             count1++;
         } else {
-            printf("epoll_poller_poll reactor_cb return NULL\n");
+            //printf("[%d] epoll_poller_poll reactor_cb return NULL, events=0x%08x\n", getpid(), _events[i].events);
         }
     }
     //printf("epoll_poller_poll read %d events\n", count);

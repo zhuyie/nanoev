@@ -11,7 +11,7 @@ SOURCES= test_server.c
 OBJECTS= $(subst .c,.o,$(SOURCES))
 
 $(PROG): $(OBJECTS) $(LIBFILE)
-	$(CC) $(CFLAGS) $(INCLUDES) $(LIBDIR) -lnanoev -o $@ $(OBJECTS)
+	$(CC) $(OBJECTS) $(CFLAGS) $(INCLUDES) $(LIBDIR) -lnanoev -o $@
 	
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
