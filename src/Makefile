@@ -9,6 +9,7 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 CFLAGS= -g -std=c99
+INCLUDES= -I../include
 
 SOURCES= \
 	nanoev_lib.c \
@@ -21,7 +22,6 @@ SOURCES= \
 	nanoev_async.c \
 	nanoev_loop.c \
 	nanoev_poller.c \
-	nanoev_poller_iocp.c \
 	nanoev_poller_kqueue.c \
 	nanoev_poller_epoll.c
 
