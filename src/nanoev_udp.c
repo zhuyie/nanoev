@@ -360,8 +360,9 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
     nanoev_udp *udp = (nanoev_udp*)proactor;
 
     if (events == _EV_READ) {
+        udp->from_addr_len = sizeof(udp->from_addr);
         int ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
-            (struct sockaddr*)&udp->from_addr, sockaddr_len(udp));
+            (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
         if (ret > 0) {
             udp->ctx_read.status = 0;
             udp->ctx_read.bytes = ret;
