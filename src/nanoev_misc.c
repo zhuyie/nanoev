@@ -67,39 +67,95 @@ int time_cmp(const nanoev_timeval *tv0, const nanoev_timeval *tv1)
 
 /*----------------------------------------------------------------------------*/
 
-void nanoev_addr_init(
+int nanoev_addr_init(
     struct nanoev_addr *addr, 
+    int family,
     const char *ip, 
     unsigned short port
     )
 {
     ASSERT(addr && ip && port);
-    addr->ip = inet_addr(ip);
-    addr->port = htons(port);
-}
 
-void nanoev_addr_get_ip(
-    const struct nanoev_addr *addr, 
-    char ip[16]
-    )
-{
-    const char *s;
+    memset(addr, 0, sizeof(struct nanoev_addr));
+    
+    if (family == NANOEV_AF_INET) {
+        struct sockaddr_in *_addr = (struct sockaddr_in*)addr;
+        _addr->sin_family = AF_INET;
+        if (inet_pton(AF_INET, ip, &_addr->sin_addr) != 1) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        _addr->sin_addr.s_addr = inet_addr(ip);
+        _addr->sin_port = htons(port);
+        return NANOEV_SUCCESS;
 
-    ASSERT(addr && ip);
+    } else if (family == NANOEV_AF_INET6) {
+        struct sockaddr_in6 *_addr = (struct sockaddr_in6*)addr;
+        _addr->sin6_family = AF_INET6;
+        if (inet_pton(AF_INET6, ip, &_addr->sin6_addr) != 1) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        _addr->sin6_port = htons(port);
+        return NANOEV_SUCCESS;
 
-    s = inet_ntoa(*(struct in_addr*)&addr->ip);
-    if (s) {
-        strcpy(ip, s);
     } else {
-        ip[0] = '\0';
+        return NANOEV_ERROR_INVALID_ARG;
     }
 }
 
-void nanoev_addr_get_port(
+int nanoev_addr_get_ip(
+    const struct nanoev_addr *addr, 
+    char *ip,
+    int ip_len
+    )
+{
+    ASSERT(addr && ip);
+
+    if (addr->ss_family == AF_INET) {
+        struct sockaddr_in *_addr = (struct sockaddr_in*)addr;
+        /* xxx.xxx.xxx.xxx */
+        if (ip_len < 16) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        if (!inet_ntop(AF_INET, &_addr->sin_addr, ip, ip_len)) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        return NANOEV_SUCCESS;
+
+    } else if (addr->ss_family == AF_INET6) {
+        struct sockaddr_in6 *_addr = (struct sockaddr_in6*)addr;
+        /* xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx */
+        /* xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:yyy.yyy.yyy.yyy */
+        if (ip_len < 46) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        if (!inet_ntop(AF_INET6, &_addr->sin6_addr, ip, ip_len)) {
+            return NANOEV_ERROR_INVALID_ARG;
+        }
+        return NANOEV_SUCCESS;
+    
+    } else {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
+}
+
+int nanoev_addr_get_port(
     const struct nanoev_addr *addr, 
     unsigned short *port
     )
 {
     ASSERT(addr && port);
-    *port = ntohs(addr->port);
+
+    if (addr->ss_family == AF_INET) {
+        struct sockaddr_in *_addr = (struct sockaddr_in*)addr;
+        *port = ntohs(_addr->sin_port);
+        return NANOEV_SUCCESS;
+
+    } else if (addr->ss_family == AF_INET6) {
+        struct sockaddr_in6 *_addr = (struct sockaddr_in6*)addr;
+        *port = ntohs(_addr->sin6_port);
+        return NANOEV_SUCCESS;
+
+    } else {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
 }

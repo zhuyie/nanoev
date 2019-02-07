@@ -97,23 +97,24 @@ void nanoev_event_set_userdata(
 
 /*----------------------------------------------------------------------------*/
 
-struct nanoev_addr {
-    unsigned int ip;
-    unsigned short port;
-};
+#define nanoev_addr sockaddr_storage
+#define NANOEV_AF_INET    AF_INET
+#define NANOEV_AF_INET6   AF_INET6
 
-void nanoev_addr_init(
+int nanoev_addr_init(
     struct nanoev_addr *addr, 
+    int family,
     const char *ip, 
     unsigned short port
     );
 
-void nanoev_addr_get_ip(
+int nanoev_addr_get_ip(
     const struct nanoev_addr *addr, 
-    char ip[16]
+    char *ip,
+    int ip_len
     );
 
-void nanoev_addr_get_port(
+int nanoev_addr_get_port(
     const struct nanoev_addr *addr, 
     unsigned short *port
     );

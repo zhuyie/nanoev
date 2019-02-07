@@ -105,6 +105,19 @@ int main(int argc, char* argv[])
     nanoev_event *udp;
     nanoev_timeval tmStart, tmEnd;
     unsigned int duration;
+    int family;
+    const char *addr;
+    unsigned short port;
+
+    if (argc > 1 && strcmp(argv[1], "-ipv6") == 0) {
+        family = NANOEV_AF_INET6;
+        addr = "::1";
+        port = 4000;
+    } else {
+        family = NANOEV_AF_INET;
+        addr = "127.0.0.1";
+        port = 4000;
+    }
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -117,7 +130,7 @@ int main(int argc, char* argv[])
     udp = nanoev_event_new(nanoev_event_udp, loop, NULL);
     ASSERT(udp);
 
-    nanoev_addr_init(&local_addr, "127.0.0.1", 4000);
+    nanoev_addr_init(&local_addr, family, addr, port);
     ret_code = nanoev_udp_bind(udp, &local_addr);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_udp_bind return %d, udp_error=%d\n", ret_code, nanoev_udp_error(udp));        
@@ -129,7 +142,7 @@ int main(int argc, char* argv[])
     ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
-    nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
+    nanoev_addr_init(&server_addr, family, addr, port);
     ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
     ASSERT(ret_code == NANOEV_SUCCESS);
 

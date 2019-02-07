@@ -93,6 +93,19 @@ int main(int argc, char* argv[])
     nanoev_event *tcp;
     struct nanoev_addr server_addr;
     client *c;
+    int family;
+    const char *addr;
+    unsigned short port;
+
+    if (argc > 1 && strcmp(argv[1], "-ipv6") == 0) {
+        family = NANOEV_AF_INET6;
+        addr = "::1";
+        port = 4000;
+    } else {
+        family = NANOEV_AF_INET;
+        addr = "127.0.0.1";
+        port = 4000;
+    }
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -116,7 +129,7 @@ int main(int argc, char* argv[])
 
     tcp = nanoev_event_new(nanoev_event_tcp, loop, c);
     ASSERT(tcp);
-    nanoev_addr_init(&server_addr, "127.0.0.1", 4000);
+    nanoev_addr_init(&server_addr, family, addr, port);
     ret_code = nanoev_tcp_connect(tcp, &server_addr, on_connect);
     ASSERT(ret_code == NANOEV_SUCCESS);
 

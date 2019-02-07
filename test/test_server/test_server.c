@@ -103,12 +103,23 @@ int main(int argc, char* argv[])
 {
     int ret_code;
     global_data global;
-    const char *ip;
+    int family;
+    const char *addr;
     unsigned short port;
     nanoev_loop *loop;
     nanoev_event *tcp;
     struct nanoev_addr local_addr;
     nanoev_event *async;
+
+    if (argc > 1 && strcmp(argv[1], "-ipv6") == 0) {
+        family = NANOEV_AF_INET6;
+        addr = "::1";
+        port = 4000;
+    } else {
+        family = NANOEV_AF_INET;
+        addr = "127.0.0.1";
+        port = 4000;
+    }
 
     ret_code = nanoev_init();
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -123,14 +134,12 @@ int main(int argc, char* argv[])
     async = nanoev_event_new(nanoev_event_async, loop, NULL);
     ASSERT(async);
 
-    ip = "0.0.0.0";
-    port = 4000;
-    nanoev_addr_init(&local_addr, ip, port);
+    nanoev_addr_init(&local_addr, family, addr, port);
     ret_code = nanoev_tcp_listen(tcp, &local_addr, 5);
     ASSERT(ret_code == NANOEV_SUCCESS);
     ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
     ASSERT(ret_code == NANOEV_SUCCESS);
-    printf("Listening at %s:%d\n", ip, (int)port);
+    printf("Listening at %s:%d\n", addr, (int)port);
 
     nanoev_async_start(async, on_async);
     async_for_ctrl_c = async;
@@ -236,7 +245,7 @@ static void on_accept(
     )
 {
     struct nanoev_addr addr;
-    char ip[16];
+    char ip[46];
     unsigned short port;
     client *c;
     nanoev_timeval after; 
@@ -258,7 +267,7 @@ static void on_accept(
         printf("nanoev_tcp_addr failed, code = %u\n", ret_code);
         goto ON_ACCEPT_ERROR;
     }
-    nanoev_addr_get_ip(&addr, ip);
+    nanoev_addr_get_ip(&addr, ip, sizeof(ip));
     nanoev_addr_get_port(&addr, &port);
     printf("Client %s:%d connected\n", ip, (int)port);
 

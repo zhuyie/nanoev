@@ -2,11 +2,12 @@
 
 /*----------------------------------------------------------------------------*/
 
-#define LOCAL_ADDR_BUF_LEN  (sizeof(struct sockaddr_in) + 16)
-#define REMOTE_ADDR_BUF_LEN (sizeof(struct sockaddr_in) + 16)
+#define LOCAL_ADDR_BUF_LEN  (sizeof(struct sockaddr_storage) + 16)
+#define REMOTE_ADDR_BUF_LEN (sizeof(struct sockaddr_storage) + 16)
 
 struct nanoev_tcp {
     NANOEV_PROACTOR_FILEDS
+    int family;
     SOCKET sock;
     int error_code;
     io_context ctx_read;
@@ -22,9 +23,11 @@ struct nanoev_tcp {
 };
 typedef struct nanoev_tcp nanoev_tcp;
 
-static void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
-static nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket);
+static void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
+static nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCKET socket);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
+static int create_tcp_socket(nanoev_tcp *tcp, int family);
+static int sockaddr_len(nanoev_tcp *tcp);
 
 #define NANOEV_TCP_FLAG_CONNECTED    (0x00000001)      /* connection established */
 #define NANOEV_TCP_FLAG_LISTENING    (0x00000002)      /* listening */
@@ -47,7 +50,7 @@ nanoev_event* tcp_new(nanoev_loop *loop, void *userdata)
     tcp->type = nanoev_event_tcp;
     tcp->loop = loop;
     tcp->userdata = userdata;
-    tcp->cb = __tcp_proactor_callback;
+    tcp->cb = tcp_proactor_callback;
 #ifndef _WIN32
     tcp->reactor_cb = reactor_cb;
 #endif
@@ -87,8 +90,7 @@ int nanoev_tcp_connect(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
-    struct sockaddr_in local_addr;
-    struct sockaddr_in remote_addr;
+    struct sockaddr_storage local_addr;
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -99,50 +101,33 @@ int nanoev_tcp_connect(
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    tcp->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (INVALID_SOCKET == tcp->sock) {
-        error_code = socket_last_error();
+    error_code = create_tcp_socket(tcp, server_addr->ss_family);
+    if (0 != error_code)
         goto ERROR_EXIT;
-    }
-
-#ifdef _WIN32
-    /* Make the socket non-inheritable */
-    SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
-#endif
-
-    if (!set_non_blocking(tcp->sock, 1)) {
-        error_code = socket_last_error();
-        goto ERROR_EXIT;
-    }
-
-    remote_addr.sin_family = AF_INET;
-    remote_addr.sin_addr.s_addr = server_addr->ip;
-    remote_addr.sin_port = server_addr->port;
 
 #ifdef _WIN32
     error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, _EV_READ);
-    if (error_code)
+    if (0 != error_code)
         goto ERROR_EXIT;
 
     /* We have to call bind(...), or ConnectEx will failed with WSAEINVAL... */
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    local_addr.sin_port = htons(0);
-    if (0 != bind(tcp->sock, (const struct sockaddr*)&local_addr, sizeof(local_addr))) {
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.ss_family = tcp->family;
+    if (0 != bind(tcp->sock, (const struct sockaddr*)&local_addr, sockaddr_len(tcp))) {
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
 
     /* Call ConnectEx */
-    if (!get_winsock_ext()->ConnectEx(tcp->sock, (const struct sockaddr*)&remote_addr, 
-            sizeof(remote_addr), NULL, 0, NULL, &tcp->ctx_write)
+    if (!get_winsock_ext()->ConnectEx(tcp->sock, (const struct sockaddr*)server_addr, 
+            sockaddr_len(tcp), NULL, 0, NULL, &tcp->ctx_write)
          && ERROR_IO_PENDING != WSAGetLastError()
         ) {
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
     }
 #else
-    int ret = connect(tcp->sock, (const struct sockaddr*)&remote_addr, sizeof(remote_addr));
+    int ret = connect(tcp->sock, (const struct sockaddr*)server_addr, sockaddr_len(tcp));
     if (ret == 0) {
         tcp->ctx_write.status = 0;
         tcp->ctx_write.bytes = 0;
@@ -179,7 +164,6 @@ int nanoev_tcp_listen(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
-    struct sockaddr_in addr;
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -190,31 +174,16 @@ int nanoev_tcp_listen(
     if (tcp->sock != INVALID_SOCKET)
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    tcp->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (INVALID_SOCKET == tcp->sock) {
-        error_code = socket_last_error();
+    error_code = create_tcp_socket(tcp, local_addr->ss_family);
+    if (0 != error_code)
         goto ERROR_EXIT;
-    }
-
-#ifdef _WIN32
-    /* Make the socket non-inheritable */
-    SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
-#endif
-
-    if (!set_non_blocking(tcp->sock, 1)) {
-        error_code = socket_last_error();
-        goto ERROR_EXIT;
-    }
 
     error_code = register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, _EV_READ);
-    if (error_code)
+    if (0 != error_code)
         goto ERROR_EXIT;
 
     /* bind */
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = local_addr->ip;
-    addr.sin_port = local_addr->port;
-    if (0 != bind(tcp->sock, (const struct sockaddr*)&addr, sizeof(addr))) {
+    if (0 != bind(tcp->sock, (const struct sockaddr*)local_addr, sockaddr_len(tcp))) {
         error_code = socket_last_error();
         goto ERROR_EXIT;
     }
@@ -273,7 +242,7 @@ int nanoev_tcp_accept(
 
 #ifdef _WIN32
     /* Open a socket for the accepted connection. */
-    socket_accept = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    socket_accept = socket(tcp->family, SOCK_STREAM, 0);
     if (INVALID_SOCKET == socket_accept) {
         error_code = WSAGetLastError();
         goto ERROR_EXIT;
@@ -438,7 +407,6 @@ int nanoev_tcp_addr(
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
-    struct sockaddr_in sock_addr;
     socklen_t len;
     int ret_code;
 
@@ -455,11 +423,11 @@ int nanoev_tcp_addr(
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    len = sizeof(struct sockaddr_in);
+    len = sockaddr_len(tcp);
     if (local) {
-        ret_code = getsockname(tcp->sock, (struct sockaddr*)&sock_addr, &len);
+        ret_code = getsockname(tcp->sock, (struct sockaddr*)addr, &len);
     } else {
-        ret_code = getpeername(tcp->sock, (struct sockaddr*)&sock_addr, &len);
+        ret_code = getpeername(tcp->sock, (struct sockaddr*)addr, &len);
     }
     if (0 != ret_code) {
         tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -467,8 +435,6 @@ int nanoev_tcp_addr(
         return NANOEV_ERROR_FAIL;
     }
 
-    addr->ip = sock_addr.sin_addr.s_addr;
-    addr->port = sock_addr.sin_port;
     return NANOEV_SUCCESS;
 }
 
@@ -534,7 +500,7 @@ int nanoev_tcp_getopt(
 
 /*----------------------------------------------------------------------------*/
 
-void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
+void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     nanoev_tcp *tcp = (nanoev_tcp*)proactor;
     nanoev_tcp_on_write on_write;
@@ -638,7 +604,7 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
                 }
 
                 /* alloc a new tcp object */
-                tcp_new = __tcp_alloc_client(tcp->loop, userdata_new, socket_accept);
+                tcp_new = tcp_alloc_client(tcp->loop, userdata_new, tcp->family, socket_accept);
                 if (!tcp_new) {
                     status = ENOMEM;
                     goto ON_ACCEPT_ERROR;
@@ -696,11 +662,16 @@ void __tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     }
 }
 
-nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket)
+nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCKET socket)
 {
     nanoev_tcp *tcp = (nanoev_tcp*)tcp_new(loop, userdata);
     if (!tcp)
         return NULL;
+
+    if (!set_non_blocking(socket, 1)) {
+        tcp_free((nanoev_event*)tcp);
+        return NULL;
+    }
 
     if (register_proactor(loop, (nanoev_proactor*)tcp, socket, _EV_READ)) {
         tcp_free((nanoev_event*)tcp);
@@ -708,6 +679,7 @@ nanoev_tcp* __tcp_alloc_client(nanoev_loop *loop, void *userdata, SOCKET socket)
     }
 
     tcp->flags |= NANOEV_TCP_FLAG_CONNECTED;
+    tcp->family = family;
     tcp->sock = socket;
     
     return tcp;
@@ -788,3 +760,41 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
     }
 }
 #endif
+
+static int create_tcp_socket(nanoev_tcp *tcp, int family)
+{
+    int error_code = 0;
+    ASSERT(tcp->sock == INVALID_SOCKET);
+    ASSERT(family == AF_INET || family == AF_INET6);
+
+    tcp->family = family;
+    
+    tcp->sock = socket(family, SOCK_STREAM, 0);
+    if (INVALID_SOCKET == tcp->sock) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
+
+#ifdef _WIN32
+    /* Make the socket non-inheritable */
+    SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
+#endif
+
+    if (!set_non_blocking(tcp->sock, 1)) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
+
+ERROR_EXIT:
+    return error_code;
+}
+
+static int sockaddr_len(nanoev_tcp *tcp)
+{
+    if (tcp->family == AF_INET) {
+        return sizeof(struct sockaddr_in);
+    } else {
+        ASSERT(tcp->family == AF_INET6);
+        return sizeof(struct sockaddr_in6);
+    }
+}

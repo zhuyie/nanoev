@@ -4,6 +4,7 @@
 
 struct nanoev_udp {
     NANOEV_PROACTOR_FILEDS
+    int family;
     SOCKET sock;
     int error_code;
     io_context ctx_read;
@@ -11,9 +12,9 @@ struct nanoev_udp {
     io_buf buf_read;
     io_buf buf_write;
     socklen_t from_addr_len;
-    struct sockaddr_in from_addr;
+    struct sockaddr_storage from_addr;
 #ifndef _WIN32
-    struct sockaddr_in to_addr;
+    struct sockaddr_storage to_addr;
 #endif
     /* callback functions */
     nanoev_udp_on_write on_write;
@@ -21,8 +22,10 @@ struct nanoev_udp {
 };
 typedef struct nanoev_udp nanoev_udp;
 
-static void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
+static void udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
+static int create_udp_socket(nanoev_udp *udp, int family);
+static int sockaddr_len(nanoev_udp *udp);
 
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
@@ -34,7 +37,6 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
 {
     nanoev_udp *udp;
-    int error_code = 0;
 
     udp = (nanoev_udp*)mem_alloc(sizeof(nanoev_udp));
     if (!udp)
@@ -44,36 +46,12 @@ nanoev_event* udp_new(nanoev_loop *loop, void *userdata)
     udp->type = nanoev_event_udp;
     udp->loop = loop;
     udp->userdata = userdata;
-    udp->cb = __udp_proactor_callback;
+    udp->cb = udp_proactor_callback;
 #ifndef _WIN32
     udp->reactor_cb = reactor_cb;
 #endif
+    udp->sock = INVALID_SOCKET;
 
-    udp->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (INVALID_SOCKET == udp->sock) {
-        error_code = socket_last_error();
-        goto ERROR_EXIT;
-    }
-
-#ifdef _WIN32
-    /* Make the socket non-inheritable */
-    SetHandleInformation((HANDLE)udp->sock, HANDLE_FLAG_INHERIT, 0);
-#endif
-
-    if (!set_non_blocking(udp->sock, 1)) {
-        error_code = socket_last_error();
-        goto ERROR_EXIT;
-    }
-
-    error_code = register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, _EV_READ);
-    if (error_code)
-        goto ERROR_EXIT;
-
-    return (nanoev_event*)udp;
-
-ERROR_EXIT:
-    udp->error_code = error_code;
-    udp->flags |= NANOEV_UDP_FLAG_ERROR;
     return (nanoev_event*)udp;
 }
 
@@ -160,7 +138,6 @@ int nanoev_udp_write(
     )
 {
     nanoev_udp *udp = (nanoev_udp*)event;
-    struct sockaddr_in addr;
 
     ASSERT(udp);
     ASSERT(udp->type == nanoev_event_udp);
@@ -168,17 +145,20 @@ int nanoev_udp_write(
 
     if (!buf || !len || !to_addr || !callback)
         return NANOEV_ERROR_INVALID_ARG;
-    if (udp->sock == INVALID_SOCKET
-        || udp->flags & NANOEV_UDP_FLAG_ERROR
+    if (udp->flags & NANOEV_UDP_FLAG_ERROR
         || udp->flags & NANOEV_UDP_FLAG_DELETED
         || udp->flags & NANOEV_UDP_FLAG_WRITING
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = to_addr->ip;
-    addr.sin_port = to_addr->port;
+    if (udp->sock == INVALID_SOCKET) {
+        int ret_code = create_udp_socket(udp, to_addr->ss_family);
+        if (ret_code != 0) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = ret_code;
+            return NANOEV_ERROR_FAIL;
+        }
+    }
 
     udp->buf_write.buf = (char*)buf;
     udp->buf_write.len = len;
@@ -186,7 +166,7 @@ int nanoev_udp_write(
 
 #ifdef _WIN32
     if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
-        (struct sockaddr*)&addr, sizeof(addr), &udp->ctx_write, NULL)
+        (struct sockaddr*)to_addr, sockaddr_len(udp), &udp->ctx_write, NULL)
         && WSA_IO_PENDING != WSAGetLastError()
         ) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
@@ -194,9 +174,9 @@ int nanoev_udp_write(
         return NANOEV_ERROR_FAIL;
     }
 #else
-    memcpy(&(udp->to_addr), &addr, sizeof(addr));
+    memcpy(&(udp->to_addr), to_addr, sizeof(udp->to_addr));
     int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
-        (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
+        (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
     if (ret > 0) {
         udp->ctx_write.status = 0;
         udp->ctx_write.bytes = ret;
@@ -228,22 +208,25 @@ int nanoev_udp_bind(
     )
 {
     nanoev_udp *udp = (nanoev_udp*)event;
-    struct sockaddr_in local_addr;
     int ret_code;
 
     ASSERT(event);
     ASSERT(addr);
 
-    if (udp->sock == INVALID_SOCKET
+    if (udp->sock != INVALID_SOCKET
         || udp->flags & NANOEV_UDP_FLAG_ERROR
         || udp->flags & NANOEV_UDP_FLAG_DELETED
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = addr->ip;
-    local_addr.sin_port = addr->port;
-    ret_code = bind(udp->sock, (const struct sockaddr*)&local_addr, sizeof(local_addr));
+    ret_code = create_udp_socket(udp, addr->ss_family);
+    if (ret_code != 0) {
+        udp->flags |= NANOEV_UDP_FLAG_ERROR;
+        udp->error_code = ret_code;
+        return NANOEV_ERROR_FAIL;
+    }
+
+    ret_code = bind(udp->sock, (const struct sockaddr*)addr, sockaddr_len(udp));
     if (0 != ret_code) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
         udp->error_code = socket_last_error();
@@ -315,14 +298,13 @@ int nanoev_udp_getopt(
 
 /*----------------------------------------------------------------------------*/
 
-void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
+void udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     nanoev_udp *udp = (nanoev_udp*)proactor;
     nanoev_udp_on_write on_write;
     nanoev_udp_on_read on_read;
     int status;
     unsigned int bytes;
-    struct nanoev_addr addr;
 
 #ifdef _WIN32
     /**
@@ -349,9 +331,7 @@ void __udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         udp->on_read = NULL;
         if (!(udp->flags & NANOEV_UDP_FLAG_DELETED)) {
             ASSERT(on_read);
-            addr.ip = udp->from_addr.sin_addr.s_addr;
-            addr.port = udp->from_addr.sin_port;
-            on_read((nanoev_event*)udp, status, udp->buf_read.buf, bytes, &addr);
+            on_read((nanoev_event*)udp, status, udp->buf_read.buf, bytes, &udp->from_addr);
         }
 
     } else {
@@ -381,7 +361,7 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 
     if (events == _EV_READ) {
         int ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
-            (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
+            (struct sockaddr*)&udp->from_addr, sockaddr_len(udp));
         if (ret > 0) {
             udp->ctx_read.status = 0;
             udp->ctx_read.bytes = ret;
@@ -395,7 +375,7 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
     } else {
         ASSERT(events == _EV_WRITE);
         int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
-            (struct sockaddr*)&udp->to_addr, sizeof(udp->to_addr));
+            (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
         if (ret > 0) {
             udp->ctx_write.status = 0;
             udp->ctx_write.bytes = ret;
@@ -408,3 +388,45 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
     }
 }
 #endif
+
+static int create_udp_socket(nanoev_udp *udp, int family)
+{
+    int error_code = 0;
+    ASSERT(udp->sock == INVALID_SOCKET);
+    ASSERT(family == AF_INET || family == AF_INET6);
+
+    udp->family = family;
+
+    udp->sock = socket(family, SOCK_DGRAM, 0);
+    if (INVALID_SOCKET == udp->sock) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
+
+#ifdef _WIN32
+    /* Make the socket non-inheritable */
+    SetHandleInformation((HANDLE)udp->sock, HANDLE_FLAG_INHERIT, 0);
+#endif
+
+    if (!set_non_blocking(udp->sock, 1)) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
+
+    error_code = register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, _EV_READ);
+    if (error_code)
+        goto ERROR_EXIT;
+
+ERROR_EXIT:
+    return error_code;
+}
+
+static int sockaddr_len(nanoev_udp *udp)
+{
+    if (udp->family == AF_INET) {
+        return sizeof(struct sockaddr_in);
+    } else {
+        ASSERT(udp->family == AF_INET6);
+        return sizeof(struct sockaddr_in6);
+    }
+}
