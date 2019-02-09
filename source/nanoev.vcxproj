@@ -19,9 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="nanoev.h" />
-    <ClInclude Include="nanoev.hpp" />
+    <ClInclude Include="..\include\nanoev.h" />
+    <ClInclude Include="..\include\nanoev.hpp" />
     <ClInclude Include="nanoev_internal.h" />
+    <ClInclude Include="nanoev_internal_windows.h" />
     <ClInclude Include="nanoev_poller.h" />
   </ItemGroup>
   <ItemGroup>

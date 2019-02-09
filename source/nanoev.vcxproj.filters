@@ -6,19 +6,25 @@
       <Extensions>
       </Extensions>
     </Filter>
+    <Filter Include="Include Files">
+      <UniqueIdentifier>{418b2475-8481-4e92-af2b-a1131ed3b78f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="nanoev.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="nanoev_internal.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nanoev.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="nanoev_poller.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nanoev_internal_windows.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\nanoev.h">
+      <Filter>Include Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\nanoev.hpp">
+      <Filter>Include Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
