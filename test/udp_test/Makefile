@@ -3,8 +3,8 @@ PROG= udp_test
 CFLAGS= -g
 INCLUDES= -I../../include
 
-LIBDIR= -L../../src
-LIBFILE= ../../src/libnanoev.a
+LIBDIR= -L../../source
+LIBFILE= ../../source/libnanoev.a
 
 SOURCES= udp_test.c
 

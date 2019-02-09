@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nanoev", "src\nanoev.vcxproj", "{6A273931-3EE1-4DE4-98C7-E5547B79E29B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nanoev", "source\nanoev.vcxproj", "{6A273931-3EE1-4DE4-98C7-E5547B79E29B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_client", "test\test_client\test_client.vcxproj", "{2E27A887-6356-4FA3-8391-9DB135490EAF}"
 	ProjectSection(ProjectDependencies) = postProject

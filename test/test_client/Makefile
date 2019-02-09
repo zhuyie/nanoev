@@ -3,8 +3,8 @@ PROG= test_client
 CFLAGS= -g
 INCLUDES= -I../../include
 
-LIBDIR= -L../../src
-LIBFILE= ../../src/libnanoev.a
+LIBDIR= -L../../source
+LIBFILE= ../../source/libnanoev.a
 
 SOURCES= test_client.c
 

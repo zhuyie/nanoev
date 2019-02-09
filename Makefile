@@ -1,4 +1,4 @@
-DIRS= src test/udp_test test/test_client test/test_server
+DIRS= source test/udp_test test/test_client test/test_server
 
 all:
 	@for dir in $(DIRS); do \
