@@ -49,7 +49,9 @@ void nanoev_loop_break(
     nanoev_loop *loop
     );
 
-void* nanoev_loop_userdata();
+void* nanoev_loop_userdata(
+    nanoev_loop *loop
+    );
 
 void nanoev_loop_now(
     nanoev_loop *loop,
