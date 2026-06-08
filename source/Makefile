@@ -8,7 +8,7 @@ ifeq ($(UNAME_S),Darwin)
 	LIBTOOL= libtool -static -o
 endif
 
-CFLAGS= -g -std=c99
+CFLAGS= -g -std=gnu11
 INCLUDES= -I../include
 
 SOURCES= \

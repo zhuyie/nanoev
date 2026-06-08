@@ -12,8 +12,16 @@ struct nanoev_tcp {
     int error_code;
     io_context ctx_read;
     io_context ctx_write;
-    io_buf buf_read;
-    io_buf buf_write;
+    union {
+        struct {
+            io_buf buf_read;
+            io_buf buf_write;
+        };
+        struct {
+            nanoev_tcp_alloc_userdata alloc_userdata;
+            SOCKET socket_accept;
+        };
+    };
     unsigned char *accept_addr_buf;
     /* callback functions */
     nanoev_tcp_on_write   on_write;
@@ -240,6 +248,9 @@ int nanoev_tcp_accept(
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
+    tcp->socket_accept = INVALID_SOCKET;
+    tcp->alloc_userdata = alloc_userdata;
+
 #ifdef _WIN32
     /* Open a socket for the accepted connection. */
     socket_accept = socket(tcp->family, SOCK_STREAM, 0);
@@ -263,13 +274,13 @@ int nanoev_tcp_accept(
         goto ERROR_EXIT;
     }
 
-    tcp->buf_write.buf = (char*)socket_accept;  /* Tricky */
+    tcp->socket_accept = socket_accept;
 #else
     int fd = accept(tcp->sock, NULL, NULL);
-    if (fd > 0) {
+    if (fd >= 0) {
         tcp->ctx_read.status = 0;
         tcp->ctx_read.bytes = fd;
-        tcp->buf_write.buf = (char*)(uintptr_t)fd;  /* Tricky */
+        tcp->socket_accept = fd;
         submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_read);
     } else {
         ASSERT(fd == -1);
@@ -279,8 +290,6 @@ int nanoev_tcp_accept(
         }
     }
 #endif
-
-    tcp->buf_read.buf = (char*)alloc_userdata;  /* Tricky */
 
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_accept = callback;
@@ -574,8 +583,10 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
             on_accept = tcp->on_accept;
             tcp->on_accept = NULL;
 
-            socket_accept = (SOCKET)tcp->buf_write.buf; /* Tricky */
-            alloc_userdata = (nanoev_tcp_alloc_userdata)tcp->buf_read.buf;  /* Tricky */
+            socket_accept = tcp->socket_accept;
+            tcp->socket_accept = INVALID_SOCKET;
+            alloc_userdata = tcp->alloc_userdata;
+            tcp->alloc_userdata = NULL;
             tcp_new = NULL;
             userdata_new = NULL;
 
@@ -712,15 +723,15 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
         } else {
             /* accept */
             int fd = accept(tcp->sock, NULL, NULL);
-            if (fd > 0) {
+            if (fd >= 0) {
                 tcp->ctx_read.status = 0;
                 tcp->ctx_read.bytes = 0;
-                tcp->buf_write.buf = (char*)(uintptr_t)fd;  /* Tricky */
+                tcp->socket_accept = fd;
             } else {
                 ASSERT(fd == -1);
                 tcp->ctx_read.status = errno;
                 tcp->ctx_read.bytes = 0;
-                tcp->buf_write.buf = (char*)(uintptr_t)0;  /* Tricky */
+                tcp->socket_accept = INVALID_SOCKET;
             }
             return &(tcp->ctx_read);
         }
