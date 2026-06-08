@@ -44,6 +44,15 @@ int read_fail_count = 0;
 int write_success_count = 0;
 int write_fail_count = 0;
 
+static void try_finish()
+{
+    int read_count = read_success_count + read_fail_count;
+    if (times >= max_times && read_count >= max_times) {
+        int ret_code = nanoev_async_send(async_for_ctrl_c);
+        ASSERT(ret_code == NANOEV_SUCCESS);
+    }
+}
+
 void on_read(
     nanoev_event *udp,
     int status,
@@ -60,6 +69,10 @@ void on_read(
         ++read_fail_count;
 
     //printf("on_read status=%d bytes=%u data=%s\n", status, bytes, buf);
+
+    try_finish();
+    if (read_success_count + read_fail_count >= max_times)
+        return;
 
     ret_code = nanoev_udp_read(udp, read_buf, sizeof(read_buf), on_read);
     ASSERT(ret_code == NANOEV_SUCCESS);
@@ -84,8 +97,7 @@ void on_write(
         int ret_code = nanoev_udp_write(udp, msg, msg_len, &server_addr, on_write);
         ASSERT(ret_code == NANOEV_SUCCESS);
     } else {
-        int ret_code = nanoev_async_send(async_for_ctrl_c);
-        ASSERT(ret_code == NANOEV_SUCCESS);
+        try_finish();
     }
 }
 
