@@ -78,19 +78,41 @@ Applications initialize nanoev, create a loop, attach events to that loop, and
 then run the loop until `nanoev_loop_break()` is called.
 
 ```c
-nanoev_init();
+#include "nanoev.h"
+#include <stdio.h>
 
-nanoev_loop *loop = nanoev_loop_new(NULL);
-nanoev_event *timer = nanoev_event_new(nanoev_event_timer, loop, NULL);
+static void on_timer(nanoev_event *timer)
+{
+    /* Timer callbacks run on the loop thread. */
+    printf("timer fired\n");
+    nanoev_loop_break(nanoev_event_loop(timer));
+}
 
-nanoev_timeval after = { 1, 0 };
-nanoev_timer_add(timer, after, 0, on_timer);
+int main(void)
+{
+    /* Initialize platform state. Windows uses this to start Winsock. */
+    nanoev_init();
 
-nanoev_loop_run(loop);
+    /* Create one event loop and attach a one-shot timer to it. */
+    nanoev_loop *loop = nanoev_loop_new(NULL);
+    nanoev_event *timer = nanoev_event_new(nanoev_event_timer, loop, NULL);
 
-nanoev_event_free(timer);
-nanoev_loop_free(loop);
-nanoev_term();
+    /* Fire the timer after one second. */
+    nanoev_timeval after = { 1, 0 };
+    nanoev_timer_add(timer, after, 0, on_timer);
+
+    /* Run callbacks until the timer calls nanoev_loop_break(). */
+    nanoev_loop_run(loop);
+
+    /* Free events before freeing their loop. */
+    nanoev_event_free(timer);
+    nanoev_loop_free(loop);
+
+    /* Terminate platform state initialized by nanoev_init(). */
+    nanoev_term();
+
+    return 0;
+}
 ```
 
 Most operations are asynchronous. Completion is reported through the callback
