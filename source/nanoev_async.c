@@ -185,6 +185,7 @@ void __async_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     int async_sent;
     nanoev_async *async = (nanoev_async*)proactor;
+    (void)ctx;
 
     mutex_lock(&async->lock);
     async_sent = async->async_sent; 

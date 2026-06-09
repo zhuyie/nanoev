@@ -98,7 +98,9 @@ int nanoev_tcp_connect(
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
     int error_code = 0;
+#ifdef _WIN32
     struct sockaddr_storage local_addr;
+#endif
 
     ASSERT(tcp);
     ASSERT(tcp->type == nanoev_event_tcp);
@@ -543,7 +545,9 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     void *userdata_new;
     int status;
     unsigned int bytes;
+#ifdef _WIN32
     int ret_code;
+#endif
 
 #ifdef _WIN32
     /**
