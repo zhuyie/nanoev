@@ -27,14 +27,24 @@ void  mem_free(void *mem);
 
 #ifdef _WIN32
 # define mutex CRITICAL_SECTION
+# define cond CONDITION_VARIABLE
+typedef HANDLE thread_handle;
 #else
 # define mutex pthread_mutex_t
+# define cond pthread_cond_t
+typedef pthread_t thread_handle;
 #endif
 
 int  mutex_init(mutex *m);
 void mutex_uninit(mutex *m);
 void mutex_lock(mutex *m);
 void mutex_unlock(mutex *m);
+
+int  cond_init(cond *c);
+void cond_uninit(cond *c);
+void cond_wait(cond *c, mutex *m);
+void cond_signal(cond *c);
+void cond_broadcast(cond *c);
 
 /*----------------------------------------------------------------------------*/
 
@@ -45,6 +55,12 @@ void mutex_unlock(mutex *m);
 #endif
 
 thread_t get_current_thread(void);
+
+typedef void (*thread_callback)(void *arg);
+
+int  thread_create(thread_handle *thread, thread_callback callback, void *arg);
+void thread_join(thread_handle thread);
+void thread_detach(thread_handle thread);
 
 /*----------------------------------------------------------------------------*/
 

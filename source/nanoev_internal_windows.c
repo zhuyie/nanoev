@@ -1,6 +1,7 @@
 #include <ntstatus.h>
 #define WIN32_NO_STATUS
 #include "nanoev_internal.h"
+#include <process.h>
 #include <stdio.h>
 
 /*----------------------------------------------------------------------------*/
@@ -105,9 +106,90 @@ void mutex_unlock(mutex *m)
 
 /*----------------------------------------------------------------------------*/
 
+int cond_init(cond *c)
+{
+    InitializeConditionVariable(c);
+    return 0;
+}
+
+void cond_uninit(cond *c)
+{
+    (void)c;
+}
+
+void cond_wait(cond *c, mutex *m)
+{
+    SleepConditionVariableCS(c, m, INFINITE);
+}
+
+void cond_signal(cond *c)
+{
+    WakeConditionVariable(c);
+}
+
+void cond_broadcast(cond *c)
+{
+    WakeAllConditionVariable(c);
+}
+
+/*----------------------------------------------------------------------------*/
+
 thread_t get_current_thread(void)
 {
     return GetCurrentThreadId();
+}
+
+struct thread_start {
+    thread_callback callback;
+    void *arg;
+};
+
+static unsigned __stdcall thread_entry(void *arg)
+{
+    struct thread_start *start = (struct thread_start*)arg;
+    thread_callback callback = start->callback;
+    void *callback_arg = start->arg;
+
+    mem_free(start);
+    callback(callback_arg);
+
+    return 0;
+}
+
+int thread_create(thread_handle *thread, thread_callback callback, void *arg)
+{
+    struct thread_start *start;
+    uintptr_t handle;
+
+    if (!thread || !callback)
+        return NANOEV_ERROR_INVALID_ARG;
+
+    start = (struct thread_start*)mem_alloc(sizeof(struct thread_start));
+    if (!start)
+        return NANOEV_ERROR_OUT_OF_MEMORY;
+
+    start->callback = callback;
+    start->arg = arg;
+
+    handle = _beginthreadex(NULL, 0, thread_entry, start, 0, NULL);
+    if (!handle) {
+        mem_free(start);
+        return NANOEV_ERROR_FAIL;
+    }
+
+    *thread = (thread_handle)handle;
+    return NANOEV_SUCCESS;
+}
+
+void thread_join(thread_handle thread)
+{
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+}
+
+void thread_detach(thread_handle thread)
+{
+    CloseHandle(thread);
 }
 
 /*----------------------------------------------------------------------------*/

@@ -64,6 +64,7 @@ if(NANOEV_BUILD_TESTS)
         test/nanoev_test/async_test.c
         test/nanoev_test/event_test.c
         test/nanoev_test/loop_test.c
+        test/nanoev_test/thread_test.c
         test/nanoev_test/timer_test.c
     )
     target_link_libraries(nanoev_test PRIVATE nanoev)
