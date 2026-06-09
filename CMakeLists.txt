@@ -56,6 +56,15 @@ if(WIN32)
 endif()
 
 if(NANOEV_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(nanoev_test
+        test/nanoev_test/main.c
+        test/nanoev_test/addr_test.c
+    )
+    target_link_libraries(nanoev_test PRIVATE nanoev)
+    add_test(NAME nanoev_test COMMAND nanoev_test)
+
     add_executable(udp_test test/udp_test/udp_test.c)
     target_link_libraries(udp_test PRIVATE nanoev)
 

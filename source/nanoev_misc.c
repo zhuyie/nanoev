@@ -74,7 +74,9 @@ int nanoev_addr_init(
     unsigned short port
     )
 {
-    ASSERT(addr && ip && port);
+    if (!addr || !ip) {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
 
     memset(addr, 0, sizeof(struct nanoev_addr));
     
@@ -84,7 +86,6 @@ int nanoev_addr_init(
         if (inet_pton(AF_INET, ip, &_addr->sin_addr) != 1) {
             return NANOEV_ERROR_INVALID_ARG;
         }
-        _addr->sin_addr.s_addr = inet_addr(ip);
         _addr->sin_port = htons(port);
         return NANOEV_SUCCESS;
 
