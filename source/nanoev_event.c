@@ -30,6 +30,10 @@ nanoev_event* nanoev_event_new(
         event = timer_new(loop, userdata);
         break;
 
+    case nanoev_event_dns:
+        event = dns_new(loop, userdata);
+        break;
+
     default:
         ASSERT(0);
         event = NULL;
@@ -60,6 +64,10 @@ void nanoev_event_free(
 
     case nanoev_event_timer:
         timer_free(event);
+        break;
+
+    case nanoev_event_dns:
+        dns_free(event);
         break;
 
     default:
