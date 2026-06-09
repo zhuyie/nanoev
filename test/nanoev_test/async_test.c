@@ -46,8 +46,9 @@ static void test_async_closes_pipe_fd_zero(nanoev_test *test)
 {
     async_case tc;
     nanoev_event *async = NULL;
-    int saved_stdin;
+    int saved_stdin = -1;
     int probe = -1;
+    int ret;
 
     TEST_REQUIRE(test, nanoev_init() == NANOEV_SUCCESS);
     tc.loop = nanoev_loop_new(NULL);
@@ -56,13 +57,18 @@ static void test_async_closes_pipe_fd_zero(nanoev_test *test)
 
     saved_stdin = dup(STDIN_FILENO);
     TEST_REQUIRE(test, saved_stdin >= 0);
-    TEST_REQUIRE(test, close(STDIN_FILENO) == 0);
+    ret = close(STDIN_FILENO);
+    TEST_EXPECT(test, ret == 0);
+    if (ret != 0) {
+        goto cleanup;
+    }
 
     async = nanoev_event_new(nanoev_event_async, tc.loop, &tc);
     TEST_EXPECT(test, async);
     if (async) {
         TEST_EXPECT(test, nanoev_async_start(async, on_async) == NANOEV_SUCCESS);
         nanoev_event_free(async);
+        async = NULL;
     }
 
     probe = open("/dev/null", O_RDONLY);
@@ -72,7 +78,17 @@ static void test_async_closes_pipe_fd_zero(nanoev_test *test)
     }
 
     TEST_EXPECT(test, dup2(saved_stdin, STDIN_FILENO) == STDIN_FILENO);
-    close(saved_stdin);
+
+cleanup:
+    if (async) {
+        nanoev_event_free(async);
+    }
+    if (saved_stdin >= 0) {
+        if (fcntl(STDIN_FILENO, F_GETFD) == -1) {
+            dup2(saved_stdin, STDIN_FILENO);
+        }
+        close(saved_stdin);
+    }
     nanoev_loop_free(tc.loop);
     nanoev_term();
 }
