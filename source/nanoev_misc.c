@@ -109,7 +109,9 @@ int nanoev_addr_get_ip(
     int ip_len
     )
 {
-    ASSERT(addr && ip);
+    if (!addr || !ip) {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
 
     if (addr->ss_family == AF_INET) {
         struct sockaddr_in *_addr = (struct sockaddr_in*)addr;
@@ -144,7 +146,9 @@ int nanoev_addr_get_port(
     unsigned short *port
     )
 {
-    ASSERT(addr && port);
+    if (!addr || !port) {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
 
     if (addr->ss_family == AF_INET) {
         struct sockaddr_in *_addr = (struct sockaddr_in*)addr;
