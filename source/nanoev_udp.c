@@ -214,8 +214,10 @@ int nanoev_udp_bind(
     nanoev_udp *udp = (nanoev_udp*)event;
     int ret_code;
 
-    ASSERT(event);
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
     ASSERT(addr);
+    ASSERT(in_loop_thread(udp->loop));
 
     if (udp->sock != INVALID_SOCKET
         || udp->flags & NANOEV_UDP_FLAG_ERROR
@@ -266,6 +268,8 @@ int nanoev_udp_setopt(
     ASSERT(udp->type == nanoev_event_udp);
     ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
     ASSERT(in_loop_thread(udp->loop));
+    ASSERT(optval);
+    ASSERT(optlen >= 0);
 
     if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;
@@ -290,6 +294,8 @@ int nanoev_udp_getopt(
     ASSERT(udp->type == nanoev_event_udp);
     ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
     ASSERT(in_loop_thread(udp->loop));
+    ASSERT(optval);
+    ASSERT(optlen);
 
     if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;

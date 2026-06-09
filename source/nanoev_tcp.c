@@ -490,6 +490,8 @@ int nanoev_tcp_setopt(
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
     ASSERT(in_loop_thread(tcp->loop));
+    ASSERT(optval);
+    ASSERT(optlen >= 0);
 
     if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;
@@ -514,6 +516,8 @@ int nanoev_tcp_getopt(
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
     ASSERT(in_loop_thread(tcp->loop));
+    ASSERT(optval);
+    ASSERT(optlen);
 
     if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
         return NANOEV_ERROR_ACCESS_DENIED;
