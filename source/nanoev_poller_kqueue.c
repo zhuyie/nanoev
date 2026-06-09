@@ -164,14 +164,14 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
 
     count1 = 0;
     for (int i = 0; i < ret; i++) {
-        nanoev_proactor *proactor = (nanoev_proactor*)_events[i].udata;
-        ASSERT(proactor);
-        ASSERT(proactor->reactor_cb);
-
         if (_events[i].filter == EVFILT_USER) {
             ASSERT(_events[i].ident == 1);
             continue;
         } 
+
+        nanoev_proactor *proactor = (nanoev_proactor*)_events[i].udata;
+        ASSERT(proactor);
+        ASSERT(proactor->reactor_cb);
         
         io_context *ctx = NULL;
         if (_events[i].filter == EVFILT_READ) {
