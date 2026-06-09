@@ -80,6 +80,9 @@ int nanoev_timer_add(
     if (timer->min_heap_idx != (unsigned int)-1)
         return NANOEV_ERROR_FAIL;
 
+    if (after.tv_sec < 0 || after.tv_usec < 0 || after.tv_usec >= 1000000)
+        return NANOEV_ERROR_INVALID_ARG;
+
     timer->after = after;
     timer->repeat = repeat;
     nanoev_loop_now(timer->loop, &timer->timeout);

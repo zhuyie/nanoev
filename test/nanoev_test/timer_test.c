@@ -112,6 +112,58 @@ static void test_repeat_timer(nanoev_test *test)
     nanoev_term();
 }
 
+static void test_timer_add_rejects_negative_after(nanoev_test *test)
+{
+    timer_case tc;
+    nanoev_timeval after;
+
+    TEST_REQUIRE(test, nanoev_init() == NANOEV_SUCCESS);
+    tc.loop = nanoev_loop_new(NULL);
+    TEST_REQUIRE(test, tc.loop);
+    tc.fired = 0;
+    tc.add_result = NANOEV_ERROR_FAIL;
+    tc.del_result = NANOEV_ERROR_FAIL;
+    tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.timer);
+
+    after.tv_sec = -1;
+    after.tv_usec = 999999;
+    TEST_EXPECT(test, nanoev_timer_add(tc.timer, after, 0, on_oneshot_timer) == NANOEV_ERROR_INVALID_ARG);
+    TEST_EXPECT(test, nanoev_timer_add(tc.timer, milliseconds(1), 0, on_oneshot_timer) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, nanoev_loop_run(tc.loop) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, tc.fired == 1);
+
+    nanoev_event_free(tc.timer);
+    nanoev_loop_free(tc.loop);
+    nanoev_term();
+}
+
+static void test_timer_add_rejects_unnormalized_usec(nanoev_test *test)
+{
+    timer_case tc;
+    nanoev_timeval after;
+
+    TEST_REQUIRE(test, nanoev_init() == NANOEV_SUCCESS);
+    tc.loop = nanoev_loop_new(NULL);
+    TEST_REQUIRE(test, tc.loop);
+    tc.fired = 0;
+    tc.add_result = NANOEV_ERROR_FAIL;
+    tc.del_result = NANOEV_ERROR_FAIL;
+    tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.timer);
+
+    after.tv_sec = 0;
+    after.tv_usec = 1000000;
+    TEST_EXPECT(test, nanoev_timer_add(tc.timer, after, 0, on_oneshot_timer) == NANOEV_ERROR_INVALID_ARG);
+    TEST_EXPECT(test, nanoev_timer_add(tc.timer, milliseconds(1), 0, on_oneshot_timer) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, nanoev_loop_run(tc.loop) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, tc.fired == 1);
+
+    nanoev_event_free(tc.timer);
+    nanoev_loop_free(tc.loop);
+    nanoev_term();
+}
+
 static void test_repeat_timer_can_stop_in_callback(nanoev_test *test)
 {
     timer_case tc;
@@ -202,6 +254,8 @@ void test_timer(nanoev_test *test)
 {
     test_oneshot_timer(test);
     test_repeat_timer(test);
+    test_timer_add_rejects_negative_after(test);
+    test_timer_add_rejects_unnormalized_usec(test);
     test_repeat_timer_can_stop_in_callback(test);
     test_repeat_timer_can_rearm_in_callback(test);
     test_timer_free_after_rearm_in_callback(test);
