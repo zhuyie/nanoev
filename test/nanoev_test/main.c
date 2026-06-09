@@ -3,6 +3,7 @@
 
 void test_addr(nanoev_test *test);
 void test_async(nanoev_test *test);
+void test_dns(nanoev_test *test);
 void test_event(nanoev_test *test);
 void test_loop(nanoev_test *test);
 void test_thread(nanoev_test *test);
@@ -25,6 +26,7 @@ int main(void)
 
     test_addr(&test);
     test_async(&test);
+    test_dns(&test);
     test_event(&test);
     test_loop(&test);
     test_thread(&test);

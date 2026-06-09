@@ -138,6 +138,7 @@ typedef enum {
     nanoev_event_udp,
     nanoev_event_async,
     nanoev_event_timer,
+    nanoev_event_dns,
 } nanoev_event_type;
 
 /*
@@ -213,6 +214,7 @@ void nanoev_event_set_userdata(
 /*----------------------------------------------------------------------------*/
 
 #define nanoev_addr sockaddr_storage
+#define NANOEV_AF_UNSPEC  AF_UNSPEC
 #define NANOEV_AF_INET    AF_INET
 #define NANOEV_AF_INET6   AF_INET6
 
@@ -261,6 +263,52 @@ int nanoev_addr_get_ip(
 int nanoev_addr_get_port(
     const struct nanoev_addr *addr, 
     unsigned short *port
+    );
+
+/*----------------------------------------------------------------------------*/
+
+/*
+ * nanoev_dns_callback
+ *   Callback invoked when a DNS resolution completes.
+ *
+ * Parameters:
+ *   dns        - DNS event.
+ *   status     - 0 on success, otherwise getaddrinfo or NANOEV_ERROR_* code.
+ *   addrs      - Resolved addresses on success, valid only during callback.
+ *   addr_count - Number of resolved addresses.
+ */
+typedef void (*nanoev_dns_callback)(
+    nanoev_event *dns,
+    int status,
+    const struct nanoev_addr *addrs,
+    unsigned int addr_count
+    );
+
+/*
+ * nanoev_dns_resolve
+ *   Resolve a host asynchronously using the system resolver.
+ *
+ * Parameters:
+ *   event    - DNS event.
+ *   host     - Hostname or numeric IP address.
+ *   family   - NANOEV_AF_UNSPEC, NANOEV_AF_INET, or NANOEV_AF_INET6.
+ *   port     - Host-byte-order port to store in each returned address.
+ *   callback - Completion callback invoked on the event loop thread.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS if the operation was started, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   At most one resolve may be pending on an event at a time. Freeing the event
+ *   while a resolve is pending cancels the callback, but the system resolver may
+ *   continue blocking on a worker thread until it completes.
+ */
+int nanoev_dns_resolve(
+    nanoev_event *event,
+    const char *host,
+    int family,
+    unsigned short port,
+    nanoev_dns_callback callback
     );
 
 /*----------------------------------------------------------------------------*/

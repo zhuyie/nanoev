@@ -9,6 +9,7 @@ set(NANOEV_COMMON_SOURCES
     source/nanoev_event.c
     source/nanoev_timer.c
     source/nanoev_misc.c
+    source/nanoev_dns.c
     source/nanoev_tcp.c
     source/nanoev_udp.c
     source/nanoev_async.c
@@ -53,6 +54,9 @@ set_target_properties(nanoev PROPERTIES
 
 if(WIN32)
     target_link_libraries(nanoev PUBLIC ws2_32)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(nanoev PUBLIC Threads::Threads)
 endif()
 
 if(NANOEV_BUILD_TESTS)
@@ -62,6 +66,7 @@ if(NANOEV_BUILD_TESTS)
         test/nanoev_test/main.c
         test/nanoev_test/addr_test.c
         test/nanoev_test/async_test.c
+        test/nanoev_test/dns_test.c
         test/nanoev_test/event_test.c
         test/nanoev_test/loop_test.c
         test/nanoev_test/thread_test.c

@@ -107,6 +107,11 @@ void async_free(nanoev_event *event);
 nanoev_event* timer_new(nanoev_loop *loop, void *userdata);
 void timer_free(nanoev_event *event);
 
+nanoev_event* dns_new(nanoev_loop *loop, void *userdata);
+void dns_free(nanoev_event *event);
+int  dns_init(void);
+void dns_term(void);
+
 /*----------------------------------------------------------------------------*/
 
 struct nanoev_proactor;
