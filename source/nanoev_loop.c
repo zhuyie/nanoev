@@ -189,12 +189,12 @@ void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor)
     loop->endgame_proactor_listhead = proactor;
 }
 
-void submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
+int submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx)
 {
     poller_event event;
     event.proactor = proactor;
     event.ctx = ctx;
-    loop->poller_impl_->poller_submit(loop->poller_, &event);
+    return loop->poller_impl_->poller_submit(loop->poller_, &event);
 }
 
 /*----------------------------------------------------------------------------*/

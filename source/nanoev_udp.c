@@ -180,7 +180,11 @@ int nanoev_udp_write(
     if (ret > 0) {
         udp->ctx_write.status = 0;
         udp->ctx_write.bytes = ret;
-        submit_fake_io(udp->loop, (nanoev_proactor*)udp, &udp->ctx_write);
+        if (submit_fake_io(udp->loop, (nanoev_proactor*)udp, &udp->ctx_write)) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = ENOMEM;
+            return NANOEV_ERROR_FAIL;
+        }
     } else {
         if (!socket_would_block(errno)) {
             udp->flags |= NANOEV_UDP_FLAG_ERROR;

@@ -123,7 +123,7 @@ struct nanoev_proactor {
 int  in_loop_thread(nanoev_loop *loop);
 int  register_proactor(nanoev_loop *loop, nanoev_proactor *proactor, SOCKET sock, int events);
 void add_endgame_proactor(nanoev_loop *loop, nanoev_proactor *proactor);
-void submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx);
+int  submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ctx);
 
 int  set_non_blocking(SOCKET sock, int set);
 void close_socket(SOCKET sock);

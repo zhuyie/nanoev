@@ -139,7 +139,10 @@ int nanoev_tcp_connect(
     if (ret == 0) {
         tcp->ctx_write.status = 0;
         tcp->ctx_write.bytes = 0;
-        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write);
+        if (submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write)) {
+            error_code = ENOMEM;
+            goto ERROR_EXIT;
+        }
     } else {
         if (errno != EINPROGRESS) {
             error_code = errno;
@@ -277,14 +280,17 @@ int nanoev_tcp_accept(
 
     tcp->socket_accept = socket_accept;
 #else
-    int fd = accept(tcp->sock, NULL, NULL);
-    if (fd >= 0) {
+    socket_accept = accept(tcp->sock, NULL, NULL);
+    if (socket_accept != INVALID_SOCKET) {
         tcp->ctx_read.status = 0;
-        tcp->ctx_read.bytes = fd;
-        tcp->socket_accept = fd;
-        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_read);
+        tcp->ctx_read.bytes = socket_accept;
+        tcp->socket_accept = socket_accept;
+        if (submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_read)) {
+            error_code = ENOMEM;
+            tcp->socket_accept = INVALID_SOCKET;
+            goto ERROR_EXIT;
+        }
     } else {
-        ASSERT(fd == -1);
         if (!socket_would_block(errno)) {
             error_code = errno;
             goto ERROR_EXIT;
@@ -348,7 +354,11 @@ int nanoev_tcp_write(
     if (ret > 0) {
         tcp->ctx_write.status = 0;
         tcp->ctx_write.bytes = ret;
-        submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write);
+        if (submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write)) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = ENOMEM;
+            return NANOEV_ERROR_FAIL;
+        }
     } else {
         if (!socket_would_block(errno)) {
             tcp->flags |= NANOEV_TCP_FLAG_ERROR;
