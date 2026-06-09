@@ -17,7 +17,7 @@ typedef struct _kqueue_poller {
     int events_capacity;
 } _kqueue_poller;
 
-poller kqueue_poller_create()
+poller kqueue_poller_create(void)
 {
     _kqueue_poller *p = (_kqueue_poller*)mem_alloc(sizeof(_kqueue_poller));
     if (!p)

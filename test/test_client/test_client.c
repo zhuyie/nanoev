@@ -37,7 +37,7 @@ typedef struct {
     unsigned int in_buf_size;
 } client;
 
-static client* client_new();
+static client* client_new(void);
 static void client_free(client *c);
 static int ensure_in_buf(client *c, unsigned int capacity);
 static int get_remain_size(client *c);
@@ -158,7 +158,7 @@ static void on_async(
     nanoev_loop_break(loop);
 }
 
-static client* client_new()
+static client* client_new(void)
 {
     client *c = (client*)malloc(sizeof(client));
     if (c) {

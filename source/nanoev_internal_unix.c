@@ -2,12 +2,12 @@
 
 /*----------------------------------------------------------------------------*/
 
-int global_init()
+int global_init(void)
 {
     return NANOEV_SUCCESS;
 }
 
-void global_term()
+void global_term(void)
 {
 }
 
@@ -35,7 +35,7 @@ void mutex_unlock(mutex *m)
 
 /*----------------------------------------------------------------------------*/
 
-thread_t get_current_thread()
+thread_t get_current_thread(void)
 {
     return pthread_self();
 }
@@ -63,7 +63,7 @@ void close_socket(SOCKET sock)
     close(sock);
 }
 
-int socket_last_error()
+int socket_last_error(void)
 {
     return errno;
 }

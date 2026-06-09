@@ -14,8 +14,8 @@
 
 /*----------------------------------------------------------------------------*/
 
-int  global_init();
-void global_term();
+int  global_init(void);
+void global_term(void);
 
 /*----------------------------------------------------------------------------*/
 
@@ -44,7 +44,7 @@ void mutex_unlock(mutex *m);
 # define thread_t pthread_t
 #endif
 
-thread_t get_current_thread();
+thread_t get_current_thread(void);
 
 /*----------------------------------------------------------------------------*/
 
@@ -127,7 +127,7 @@ int  submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ct
 
 int  set_non_blocking(SOCKET sock, int set);
 void close_socket(SOCKET sock);
-int  socket_last_error();
+int  socket_last_error(void);
 #ifndef _WIN32
 int  socket_would_block(int error_code);
 #endif

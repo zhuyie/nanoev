@@ -14,7 +14,7 @@ typedef struct poller_event {
 
 typedef struct poller_impl {
 
-    poller (*poller_create)();
+    poller (*poller_create)(void);
 
     void (*poller_destroy)(poller p);
 
@@ -27,7 +27,7 @@ typedef struct poller_impl {
     int (*poller_notify)(poller p);
 } poller_impl;
 
-poller_impl* get_poller_impl();
+poller_impl* get_poller_impl(void);
 
 /*----------------------------------------------------------------------------*/
 

@@ -10,7 +10,7 @@ typedef struct _iocp_poller {
 
 static ULONG_PTR poller_break_key = (ULONG_PTR)-1;
 
-poller iocp_poller_create()
+poller iocp_poller_create(void)
 {
     _iocp_poller *p = (_iocp_poller*)mem_alloc(sizeof(_iocp_poller));
     if (!p)
@@ -143,7 +143,7 @@ int iocp_poller_notify(poller p)
 
 poller_impl _nanoev_poller_impl;
 
-void init_iocp_poller_impl()
+void init_iocp_poller_impl(void)
 {
     _nanoev_poller_impl.poller_create  = iocp_poller_create;
     _nanoev_poller_impl.poller_destroy = iocp_poller_destroy;

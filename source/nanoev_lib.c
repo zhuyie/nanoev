@@ -2,12 +2,12 @@
 
 /*----------------------------------------------------------------------------*/
 
-int nanoev_init()
+int nanoev_init(void)
 {
     return global_init();
 }
 
-void nanoev_term()
+void nanoev_term(void)
 {
     global_term();
 }

@@ -16,7 +16,7 @@ typedef struct _epoll_poller {
     int events_capacity;
 } _epoll_poller;
 
-poller epoll_poller_create()
+poller epoll_poller_create(void)
 {
     _epoll_poller *p = (_epoll_poller*)mem_alloc(sizeof(_epoll_poller));
     if (!p)

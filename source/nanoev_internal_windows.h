@@ -22,7 +22,7 @@ typedef struct {
     LPFN_ACCEPTEX AcceptEx;
 } nanoev_winsock_ext;
 
-const nanoev_winsock_ext* get_winsock_ext();
+const nanoev_winsock_ext* get_winsock_ext(void);
 
 #if _WIN32_WINNT < 0x0600
 
@@ -56,7 +56,7 @@ typedef struct {
     PFN_SetFileCompletionNotificationModes pSetFileCompletionNotificationModes;
 } nanoev_win32_ext_fns;
 
-const nanoev_win32_ext_fns* get_win32_ext_fns();
+const nanoev_win32_ext_fns* get_win32_ext_fns(void);
 
 int  ntstatus_to_winsock_error(long status);
 

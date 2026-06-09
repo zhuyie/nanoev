@@ -44,7 +44,7 @@ int read_fail_count = 0;
 int write_success_count = 0;
 int write_fail_count = 0;
 
-static void try_finish()
+static void try_finish(void)
 {
     int read_count = read_success_count + read_fail_count;
     if (times >= max_times && read_count >= max_times) {

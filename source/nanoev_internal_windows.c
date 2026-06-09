@@ -7,10 +7,10 @@
 
 static nanoev_winsock_ext winsock_ext = { 0 };
 static nanoev_win32_ext_fns win32_ext_fns = { 0 };
-static int init_winsock_ext();
-static void init_win32_ext_fns();
+static int init_winsock_ext(void);
+static void init_win32_ext_fns(void);
 
-int global_init()
+int global_init(void)
 {
     WSADATA wsa_data;
 
@@ -35,13 +35,13 @@ ERROR_EXIT:
     return NANOEV_ERROR_FAIL;
 }
 
-void global_term()
+void global_term(void)
 {
     /* term Winsock */
     WSACleanup();
 }
 
-static int init_winsock_ext()
+static int init_winsock_ext(void)
 {
     DWORD cbReturn;
     GUID guidCONNECTEX = WSAID_CONNECTEX;
@@ -68,7 +68,7 @@ static int init_winsock_ext()
     return 0;
 }
 
-static void init_win32_ext_fns()
+static void init_win32_ext_fns(void)
 {
     HMODULE hDLL = GetModuleHandleW(L"kernel32.dll");
     if (!hDLL)
@@ -105,7 +105,7 @@ void mutex_unlock(mutex *m)
 
 /*----------------------------------------------------------------------------*/
 
-thread_t get_current_thread()
+thread_t get_current_thread(void)
 {
     return GetCurrentThreadId();
 }
@@ -136,12 +136,12 @@ void time_now(nanoev_timeval *tv)
 
 /*----------------------------------------------------------------------------*/
 
-const nanoev_winsock_ext* get_winsock_ext()
+const nanoev_winsock_ext* get_winsock_ext(void)
 {
     return &winsock_ext;
 }
 
-const nanoev_win32_ext_fns* get_win32_ext_fns()
+const nanoev_win32_ext_fns* get_win32_ext_fns(void)
 {
     return &win32_ext_fns;
 }
@@ -164,7 +164,7 @@ void close_socket(SOCKET sock)
     closesocket(sock);
 }
 
-int socket_last_error()
+int socket_last_error(void)
 {
     return WSAGetLastError();
 }
