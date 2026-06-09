@@ -173,7 +173,8 @@ void timers_process(timer_min_heap *heap, const nanoev_timeval *now)
         if (top->flags & NANOEV_TIMER_FLAG_DELETED) {  /* freed during callback */
             mem_free(top);
 
-        } else if (top->repeat) {  /* Add back if top is a repeating timer */
+        } else if (top->repeat && top->min_heap_idx == (unsigned int)-1) {
+            /* Add back if top is a repeating timer and was not rearmed. */
             top->timeout = *now;
 
             time_add(&top->timeout, &top->after);
