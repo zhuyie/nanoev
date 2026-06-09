@@ -11,6 +11,7 @@
 
 struct nanoev_dns {
     NANOEV_EVENT_FILEDS
+    struct nanoev_dns *queue_next;
     nanoev_event *async;
     mutex lock;
     int pending;
@@ -25,13 +26,66 @@ struct nanoev_dns {
 };
 typedef struct nanoev_dns nanoev_dns;
 
+#define NANOEV_DNS_FLAG_DELETED  0x80000000
+#define DNS_THREAD_COUNT         4
+
+typedef struct dns_thread_pool {
+    mutex lock;
+    cond ready;
+    thread_handle threads[DNS_THREAD_COUNT];
+    nanoev_dns *head;
+    nanoev_dns *tail;
+    int initialized;
+    int started;
+    int stopping;
+} dns_thread_pool;
+
 static void dns_destroy(nanoev_dns *dns);
 static void dns_on_async(nanoev_event *async);
 static void dns_worker(void *arg);
+static int dns_start_workers_locked(void);
+static int dns_enqueue(nanoev_dns *dns);
 static char* dns_strdup(const char *str);
 static int dns_copy_results(struct addrinfo *results, struct nanoev_addr **addrs, unsigned int *addr_count);
 
-#define NANOEV_DNS_FLAG_DELETED  0x80000000
+static dns_thread_pool dns_pool;
+
+/*----------------------------------------------------------------------------*/
+
+int dns_init(void)
+{
+    memset(&dns_pool, 0, sizeof(dns_pool));
+
+    if (mutex_init(&dns_pool.lock))
+        return NANOEV_ERROR_FAIL;
+    if (cond_init(&dns_pool.ready)) {
+        mutex_uninit(&dns_pool.lock);
+        return NANOEV_ERROR_FAIL;
+    }
+
+    dns_pool.initialized = 1;
+    return NANOEV_SUCCESS;
+}
+
+void dns_term(void)
+{
+    if (!dns_pool.initialized)
+        return;
+
+    mutex_lock(&dns_pool.lock);
+    dns_pool.stopping = 1;
+    cond_broadcast(&dns_pool.ready);
+    mutex_unlock(&dns_pool.lock);
+
+    while (dns_pool.started > 0) {
+        dns_pool.started--;
+        thread_join(dns_pool.threads[dns_pool.started]);
+    }
+
+    cond_uninit(&dns_pool.ready);
+    mutex_uninit(&dns_pool.lock);
+    memset(&dns_pool, 0, sizeof(dns_pool));
+}
 
 /*----------------------------------------------------------------------------*/
 
@@ -99,7 +153,6 @@ int nanoev_dns_resolve(
     )
 {
     nanoev_dns *dns = (nanoev_dns*)event;
-    thread_handle thread;
     char *host_copy;
 
     ASSERT(dns);
@@ -134,7 +187,7 @@ int nanoev_dns_resolve(
     dns->callback = callback;
     mutex_unlock(&dns->lock);
 
-    if (thread_create(&thread, dns_worker, dns) != NANOEV_SUCCESS) {
+    if (dns_enqueue(dns) != NANOEV_SUCCESS) {
         mutex_lock(&dns->lock);
         dns->pending = 0;
         dns->host = NULL;
@@ -143,7 +196,6 @@ int nanoev_dns_resolve(
         mem_free(host_copy);
         return NANOEV_ERROR_FAIL;
     }
-    thread_detach(thread);
 
     return NANOEV_SUCCESS;
 }
@@ -218,7 +270,8 @@ static void dns_on_async(nanoev_event *async)
 
 static void dns_worker(void *arg)
 {
-    nanoev_dns *dns = (nanoev_dns*)arg;
+    dns_thread_pool *pool = (dns_thread_pool*)arg;
+    nanoev_dns *dns;
     struct addrinfo hints;
     struct addrinfo *results = NULL;
     struct nanoev_addr *addrs = NULL;
@@ -229,42 +282,115 @@ static void dns_worker(void *arg)
     unsigned short port;
     int status;
 
-    mutex_lock(&dns->lock);
-    host = dns->host;
-    family = dns->family;
-    port = dns->port;
-    mutex_unlock(&dns->lock);
-
-    snprintf(service, sizeof(service), "%u", (unsigned int)port);
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = family;
-    hints.ai_socktype = SOCK_STREAM;
-
-    status = getaddrinfo(host, service, &hints, &results);
-    if (status == 0) {
-        status = dns_copy_results(results, &addrs, &addr_count);
-        if (status != 0) {
-            if (addrs) {
-                mem_free(addrs);
-                addrs = NULL;
-            }
-            addr_count = 0;
+    while (1) {
+        mutex_lock(&pool->lock);
+        while (!pool->head && !pool->stopping) {
+            cond_wait(&pool->ready, &pool->lock);
         }
+        if (!pool->head && pool->stopping) {
+            mutex_unlock(&pool->lock);
+            return;
+        }
+
+        dns = pool->head;
+        pool->head = dns->queue_next;
+        if (!pool->head) {
+            pool->tail = NULL;
+        }
+        dns->queue_next = NULL;
+        mutex_unlock(&pool->lock);
+
+        results = NULL;
+        addrs = NULL;
+        addr_count = 0;
+
+        mutex_lock(&dns->lock);
+        host = dns->host;
+        family = dns->family;
+        port = dns->port;
+        mutex_unlock(&dns->lock);
+
+        snprintf(service, sizeof(service), "%u", (unsigned int)port);
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = family;
+        hints.ai_socktype = SOCK_STREAM;
+
+        status = getaddrinfo(host, service, &hints, &results);
+        if (status == 0) {
+            status = dns_copy_results(results, &addrs, &addr_count);
+            if (status != 0) {
+                if (addrs) {
+                    mem_free(addrs);
+                    addrs = NULL;
+                }
+                addr_count = 0;
+            }
+        }
+
+        if (results) {
+            freeaddrinfo(results);
+        }
+
+        mutex_lock(&dns->lock);
+        dns->status = status;
+        dns->addrs = addrs;
+        dns->addr_count = addr_count;
+        dns->completed = 1;
+        mutex_unlock(&dns->lock);
+
+        nanoev_async_send(dns->async);
+    }
+}
+
+static int dns_start_workers_locked(void)
+{
+    int i;
+
+    for (i = 0; i < DNS_THREAD_COUNT; i++) {
+        if (thread_create(&dns_pool.threads[i], dns_worker, &dns_pool) != NANOEV_SUCCESS) {
+            dns_pool.stopping = 1;
+            cond_broadcast(&dns_pool.ready);
+            mutex_unlock(&dns_pool.lock);
+
+            while (dns_pool.started > 0) {
+                dns_pool.started--;
+                thread_join(dns_pool.threads[dns_pool.started]);
+            }
+
+            mutex_lock(&dns_pool.lock);
+            dns_pool.stopping = 0;
+            return NANOEV_ERROR_FAIL;
+        }
+        dns_pool.started++;
     }
 
-    if (results) {
-        freeaddrinfo(results);
+    return NANOEV_SUCCESS;
+}
+
+static int dns_enqueue(nanoev_dns *dns)
+{
+    mutex_lock(&dns_pool.lock);
+    if (!dns_pool.initialized || dns_pool.stopping) {
+        mutex_unlock(&dns_pool.lock);
+        return NANOEV_ERROR_ACCESS_DENIED;
+    }
+    if (!dns_pool.started && dns_start_workers_locked() != NANOEV_SUCCESS) {
+        mutex_unlock(&dns_pool.lock);
+        return NANOEV_ERROR_FAIL;
     }
 
-    mutex_lock(&dns->lock);
-    dns->status = status;
-    dns->addrs = addrs;
-    dns->addr_count = addr_count;
-    dns->completed = 1;
-    mutex_unlock(&dns->lock);
+    dns->queue_next = NULL;
+    if (dns_pool.tail) {
+        dns_pool.tail->queue_next = dns;
+    } else {
+        dns_pool.head = dns;
+    }
+    dns_pool.tail = dns;
+    cond_signal(&dns_pool.ready);
+    mutex_unlock(&dns_pool.lock);
 
-    nanoev_async_send(dns->async);
+    return NANOEV_SUCCESS;
 }
 
 static char* dns_strdup(const char *str)

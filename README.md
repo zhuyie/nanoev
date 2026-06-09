@@ -126,7 +126,7 @@ passed to the operation.
   `nanoev_async_send()`, which may be used to wake the loop from another thread.
 - TCP and UDP keep the API simple: schedule at most one pending read and one
   pending write on an event at a time.
-- DNS resolution uses the system resolver on a worker thread and reports
+- DNS resolution uses the system resolver on a fixed worker pool and reports
   completion on the loop thread. Freeing a DNS event with a pending resolve
   cancels the callback, but the worker may continue until the system resolver
   returns.

@@ -301,7 +301,7 @@ typedef void (*nanoev_dns_callback)(
  * Notes:
  *   At most one resolve may be pending on an event at a time. Freeing the event
  *   while a resolve is pending cancels the callback, but the system resolver may
- *   continue blocking on its worker thread until it completes.
+ *   continue blocking on a worker thread until it completes.
  */
 int nanoev_dns_resolve(
     nanoev_event *event,
