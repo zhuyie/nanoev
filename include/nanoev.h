@@ -81,7 +81,7 @@ void nanoev_event_free(
     nanoev_event *event
     );
 
-nanoev_event_type nanoev_event__type(
+nanoev_event_type nanoev_event_typeof(
     nanoev_event *event
     );
 

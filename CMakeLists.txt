@@ -61,6 +61,7 @@ if(NANOEV_BUILD_TESTS)
     add_executable(nanoev_test
         test/nanoev_test/main.c
         test/nanoev_test/addr_test.c
+        test/nanoev_test/event_test.c
         test/nanoev_test/timer_test.c
     )
     target_link_libraries(nanoev_test PRIVATE nanoev)
