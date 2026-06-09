@@ -8,7 +8,7 @@
 #define close_pipe(p)  CloseHandle(p)
 #else
 # define pipe_handle   int
-# define INVALID_PIPE  0
+# define INVALID_PIPE  -1
 # define close_pipe(p) close(p)
 #endif
 
@@ -47,6 +47,8 @@ nanoev_event* async_new(nanoev_loop *loop, void *userdata)
     async->loop = loop;
     async->userdata = userdata;
     async->cb = __async_proactor_callback;
+    async->pipe_r = INVALID_PIPE;
+    async->pipe_w = INVALID_PIPE;
 #ifndef _WIN32
     async->reactor_cb = reactor_cb;
 #endif
@@ -106,12 +108,15 @@ int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
         return NANOEV_ERROR_FAIL;
     }
 #else
-    int fildes[2] = { 0 };
+    int fildes[2] = { INVALID_PIPE, INVALID_PIPE };
     if (pipe(fildes)) {
         return NANOEV_ERROR_FAIL;
     }
-    set_non_blocking(fildes[0], 1);
-    set_non_blocking(fildes[1], 1);
+    if (!set_non_blocking(fildes[0], 1) || !set_non_blocking(fildes[1], 1)) {
+        close_pipe(fildes[0]);
+        close_pipe(fildes[1]);
+        return NANOEV_ERROR_FAIL;
+    }
     if (register_proactor(async->loop, (nanoev_proactor*)async, fildes[0], _EV_READ)) {
         close_pipe(fildes[0]);
         close_pipe(fildes[1]);
