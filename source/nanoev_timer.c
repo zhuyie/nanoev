@@ -94,6 +94,16 @@ int nanoev_timer_del(
     ASSERT(timer);
     ASSERT(in_loop_thread(timer->loop));
 
+    /*
+     * timers_process() removes the timer from the heap before invoking its
+     * callback. Deleting the current timer from inside the callback therefore
+     * only needs to prevent repeat timers from being reinserted.
+     */
+    if (timer->flags & NANOEV_TIMER_FLAG_INVOKING_CALLBACK) {
+        timer->repeat = 0;
+        return NANOEV_SUCCESS;
+    }
+
     if (timer->min_heap_idx == (unsigned int)-1)
         return NANOEV_ERROR_FAIL;
 
