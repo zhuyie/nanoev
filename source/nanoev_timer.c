@@ -52,6 +52,13 @@ void timer_free(nanoev_event *event)
 
         mem_free(timer);
     } else {
+        /*
+         * The callback may have rearmed the current timer. Remove that heap
+         * entry now and prevent repeat reinsertion after the callback returns.
+         */
+        timer_min_heap *heap = get_loop_timers(timer->loop);
+        min_heap_erase(heap, timer);
+        timer->repeat = 0;
         timer->flags |= NANOEV_TIMER_FLAG_DELETED;
     }
 }

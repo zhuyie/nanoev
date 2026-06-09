@@ -51,6 +51,15 @@ static void on_repeat_timer_rearm(nanoev_event *timer)
     nanoev_loop_break(tc->loop);
 }
 
+static void on_timer_rearm_and_free(nanoev_event *timer)
+{
+    timer_case *tc = (timer_case*)nanoev_event_userdata(timer);
+    tc->fired++;
+    tc->add_result = nanoev_timer_add(timer, milliseconds(1), 1, on_timer_rearm_and_free);
+    nanoev_event_free(timer);
+    nanoev_loop_break(tc->loop);
+}
+
 static void on_break_timer(nanoev_event *timer)
 {
     timer_case *tc = (timer_case*)nanoev_event_userdata(timer);
@@ -159,10 +168,41 @@ static void test_repeat_timer_can_rearm_in_callback(nanoev_test *test)
     nanoev_term();
 }
 
+static void test_timer_free_after_rearm_in_callback(nanoev_test *test)
+{
+    timer_case tc;
+    nanoev_event *guard_timer;
+
+    TEST_REQUIRE(test, nanoev_init() == NANOEV_SUCCESS);
+    tc.loop = nanoev_loop_new(NULL);
+    TEST_REQUIRE(test, tc.loop);
+    tc.fired = 0;
+    tc.add_result = NANOEV_ERROR_FAIL;
+    tc.del_result = NANOEV_ERROR_FAIL;
+    tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.timer);
+    guard_timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
+    TEST_REQUIRE(test, guard_timer);
+
+    TEST_EXPECT(test, nanoev_timer_add(tc.timer, milliseconds(1), 0, on_timer_rearm_and_free) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, nanoev_loop_run(tc.loop) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, tc.fired == 1);
+    TEST_EXPECT(test, tc.add_result == NANOEV_SUCCESS);
+
+    TEST_EXPECT(test, nanoev_timer_add(guard_timer, milliseconds(3), 0, on_break_timer) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, nanoev_loop_run(tc.loop) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, tc.fired == 1);
+
+    nanoev_event_free(guard_timer);
+    nanoev_loop_free(tc.loop);
+    nanoev_term();
+}
+
 void test_timer(nanoev_test *test)
 {
     test_oneshot_timer(test);
     test_repeat_timer(test);
     test_repeat_timer_can_stop_in_callback(test);
     test_repeat_timer_can_rearm_in_callback(test);
+    test_timer_free_after_rearm_in_callback(test);
 }
