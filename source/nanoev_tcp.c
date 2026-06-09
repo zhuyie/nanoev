@@ -245,6 +245,7 @@ int nanoev_tcp_accept(
         || tcp->flags & NANOEV_TCP_FLAG_ERROR
         || tcp->flags & NANOEV_TCP_FLAG_DELETED
         || !(tcp->flags & NANOEV_TCP_FLAG_LISTENING)
+        || tcp->flags & NANOEV_TCP_FLAG_READING
         )
         return NANOEV_ERROR_ACCESS_DENIED;
 
