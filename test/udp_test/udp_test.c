@@ -17,6 +17,7 @@ static nanoev_event *async_for_ctrl_c;
 static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
 {
     int ret;
+    (void)dwCtrlType;
     ASSERT(async_for_ctrl_c);
     ret = nanoev_async_send(async_for_ctrl_c);
     ASSERT(ret == NANOEV_SUCCESS);
@@ -26,6 +27,7 @@ static BOOL WINAPI CtrlCHandler(DWORD dwCtrlType)
 static void sigint_handler(int sig)
 {
     int ret;
+    (void)sig;
     ASSERT(async_for_ctrl_c);
     ret = nanoev_async_send(async_for_ctrl_c);
     ASSERT(ret == NANOEV_SUCCESS);
@@ -62,6 +64,9 @@ void on_read(
     )
 {
     int ret_code;
+    (void)buf;
+    (void)bytes;
+    (void)from_addr;
 
     if (!status)
         ++read_success_count;
@@ -85,6 +90,9 @@ void on_write(
     unsigned int bytes
     )
 {
+    (void)buf;
+    (void)bytes;
+
     if (!status)
         ++write_success_count;
     else
