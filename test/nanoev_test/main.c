@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 void test_addr(nanoev_test *test);
+void test_async(nanoev_test *test);
 void test_event(nanoev_test *test);
 void test_timer(nanoev_test *test);
 
@@ -21,6 +22,7 @@ int main(void)
     nanoev_test test = { 0, 0 };
 
     test_addr(&test);
+    test_async(&test);
     test_event(&test);
     test_timer(&test);
 
