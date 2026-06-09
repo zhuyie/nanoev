@@ -128,6 +128,9 @@ void submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ct
 int  set_non_blocking(SOCKET sock, int set);
 void close_socket(SOCKET sock);
 int  socket_last_error();
+#ifndef _WIN32
+int  socket_would_block(int error_code);
+#endif
 
 /*----------------------------------------------------------------------------*/
 

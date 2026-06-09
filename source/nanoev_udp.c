@@ -182,7 +182,7 @@ int nanoev_udp_write(
         udp->ctx_write.bytes = ret;
         submit_fake_io(udp->loop, (nanoev_proactor*)udp, &udp->ctx_write);
     } else {
-        if (errno != EAGAIN) {
+        if (!socket_would_block(errno)) {
             udp->flags |= NANOEV_UDP_FLAG_ERROR;
             udp->error_code = errno;
             return NANOEV_ERROR_FAIL;
@@ -363,11 +363,14 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
         udp->from_addr_len = sizeof(udp->from_addr);
         int ret = recvfrom(udp->sock, udp->buf_read.buf, udp->buf_read.len, 0, 
             (struct sockaddr*)&udp->from_addr, &udp->from_addr_len);
-        if (ret > 0) {
+        if (ret >= 0) {
             udp->ctx_read.status = 0;
             udp->ctx_read.bytes = ret;
         } else {
             ASSERT(ret == -1);
+            if (socket_would_block(errno)) {
+                return NULL;
+            }
             udp->ctx_read.status = errno;
             udp->ctx_read.bytes = 0;
         }
@@ -382,6 +385,9 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
             udp->ctx_write.bytes = ret;
         } else {
             ASSERT(ret == -1);
+            if (socket_would_block(errno)) {
+                return NULL;
+            }
             udp->ctx_write.status = errno;
             udp->ctx_write.bytes = 0;
         }
@@ -409,10 +415,12 @@ static int create_udp_socket(nanoev_udp *udp, int family)
     SetHandleInformation((HANDLE)udp->sock, HANDLE_FLAG_INHERIT, 0);
 #endif
 
+#ifndef _WIN32
     if (!set_non_blocking(udp->sock, 1)) {
         error_code = socket_last_error();
         goto ERROR_EXIT;
     }
+#endif
 
     error_code = register_proactor(udp->loop, (nanoev_proactor*)udp, udp->sock, _EV_READ);
     if (error_code)

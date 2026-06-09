@@ -284,7 +284,7 @@ int nanoev_tcp_accept(
         submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_read);
     } else {
         ASSERT(fd == -1);
-        if (errno != EWOULDBLOCK) {
+        if (!socket_would_block(errno)) {
             error_code = errno;
             goto ERROR_EXIT;
         }
@@ -349,7 +349,13 @@ int nanoev_tcp_write(
         tcp->ctx_write.bytes = ret;
         submit_fake_io(tcp->loop, (nanoev_proactor*)tcp, &tcp->ctx_write);
     } else {
-        if (errno != EAGAIN) {
+        if (!socket_would_block(errno)) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = errno;
+            return NANOEV_ERROR_FAIL;
+        }
+        ASSERT(!(tcp->reactor_events & _EV_WRITE));
+        if (0 != register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, tcp->reactor_events | _EV_WRITE)) {
             tcp->flags |= NANOEV_TCP_FLAG_ERROR;
             tcp->error_code = errno;
             return NANOEV_ERROR_FAIL;
@@ -679,10 +685,12 @@ nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCK
     if (!tcp)
         return NULL;
 
+#ifndef _WIN32
     if (!set_non_blocking(socket, 1)) {
         tcp_free((nanoev_event*)tcp);
         return NULL;
     }
+#endif
 
     if (register_proactor(loop, (nanoev_proactor*)tcp, socket, _EV_READ)) {
         tcp_free((nanoev_event*)tcp);
@@ -715,6 +723,9 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
                 tcp->ctx_read.bytes = ret;
             } else {
                 ASSERT(ret == -1);
+                if (socket_would_block(errno)) {
+                    return NULL;
+                }
                 tcp->ctx_read.status = errno;
                 tcp->ctx_read.bytes = 0;
             }
@@ -729,6 +740,9 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
                 tcp->socket_accept = fd;
             } else {
                 ASSERT(fd == -1);
+                if (socket_would_block(errno)) {
+                    return NULL;
+                }
                 tcp->ctx_read.status = errno;
                 tcp->ctx_read.bytes = 0;
                 tcp->socket_accept = INVALID_SOCKET;
@@ -750,6 +764,9 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
                 tcp->ctx_write.bytes = ret;
             } else {
                 ASSERT(ret == -1);
+                if (socket_would_block(errno)) {
+                    return NULL;
+                }
                 tcp->ctx_write.status = errno;
                 tcp->ctx_write.bytes = 0;
             }
@@ -791,10 +808,12 @@ static int create_tcp_socket(nanoev_tcp *tcp, int family)
     SetHandleInformation((HANDLE)tcp->sock, HANDLE_FLAG_INHERIT, 0);
 #endif
 
+#ifndef _WIN32
     if (!set_non_blocking(tcp->sock, 1)) {
         error_code = socket_last_error();
         goto ERROR_EXIT;
     }
+#endif
 
 ERROR_EXIT:
     return error_code;

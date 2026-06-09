@@ -67,3 +67,8 @@ int socket_last_error()
 {
     return errno;
 }
+
+int socket_would_block(int error_code)
+{
+    return error_code == EAGAIN || error_code == EWOULDBLOCK;
+}
