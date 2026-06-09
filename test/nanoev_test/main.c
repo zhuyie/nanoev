@@ -4,6 +4,7 @@
 void test_addr(nanoev_test *test);
 void test_async(nanoev_test *test);
 void test_event(nanoev_test *test);
+void test_loop(nanoev_test *test);
 void test_timer(nanoev_test *test);
 
 void test_fail(
@@ -24,6 +25,7 @@ int main(void)
     test_addr(&test);
     test_async(&test);
     test_event(&test);
+    test_loop(&test);
     test_timer(&test);
 
     printf("%d checks, %d failures\n", test.checks, test.failures);

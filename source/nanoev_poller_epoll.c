@@ -54,7 +54,7 @@ poller epoll_poller_create()
 void epoll_poller_destroy(poller p)
 {
     _epoll_poller *_p = (_epoll_poller*)p;
-    ASSERT(_p->epd > 0);
+    ASSERT(_p->epd >= 0);
 
     close(_p->notifyfd);
     close(_p->epd);
@@ -67,7 +67,7 @@ int epoll_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int even
     struct epoll_event event;
     int op;
     _epoll_poller *_p = (_epoll_poller*)p;
-    ASSERT(_p->epd > 0);
+    ASSERT(_p->epd >= 0);
 
     if (proactor->reactor_events == events) {
         //printf("epoll_poller_modify fd=%d,events=%d no change\n", fd, events);
@@ -106,7 +106,7 @@ int epoll_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int even
 int epoll_poller_poll(poller p, poller_event *events, int max_events, const nanoev_timeval *timeout)
 {
     _epoll_poller *_p = (_epoll_poller*)p;
-    ASSERT(_p->epd > 0);
+    ASSERT(_p->epd >= 0);
     int count0 = 0, count1 = 0;
 
     if (_p->events_count > 0) {
@@ -186,7 +186,7 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
 int epoll_poller_submit(poller p, const poller_event *event)
 {
     _epoll_poller *_p = (_epoll_poller*)p;
-    ASSERT(_p->epd > 0);
+    ASSERT(_p->epd >= 0);
 
     if (_p->events_count == _p->events_capacity) {
         void *new_events = mem_realloc(_p->events, sizeof(poller_event)*(_p->events_capacity + 128));
@@ -208,8 +208,8 @@ int epoll_poller_submit(poller p, const poller_event *event)
 int epoll_poller_notify(poller p)
 {
     _epoll_poller *_p = (_epoll_poller*)p;
-    ASSERT(_p->epd > 0);
-    ASSERT(_p->notifyfd > 0);
+    ASSERT(_p->epd >= 0);
+    ASSERT(_p->notifyfd >= 0);
 
     uint64_t count = 1;
     int ret = write(_p->notifyfd, &count, sizeof(count));

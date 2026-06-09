@@ -49,7 +49,7 @@ poller kqueue_poller_create()
 void kqueue_poller_destroy(poller p)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
+    ASSERT(_p->kq >= 0);
 
     close(_p->kq);
     mem_free(_p->events);
@@ -60,7 +60,7 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
 {
     struct kevent changes[1];
     _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
+    ASSERT(_p->kq >= 0);
 
     int reactor_events = proactor->reactor_events;
     if (reactor_events == events) {
@@ -110,7 +110,7 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
 int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nanoev_timeval *timeout)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
+    ASSERT(_p->kq >= 0);
     int count0 = 0, count1 = 0;
 
     if (_p->events_count > 0) {
@@ -195,7 +195,7 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
 int kqueue_poller_submit(poller p, const poller_event *event)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
+    ASSERT(_p->kq >= 0);
 
     if (_p->events_count == _p->events_capacity) {
         void *new_events = mem_realloc(_p->events, sizeof(poller_event)*(_p->events_capacity + 128));
@@ -217,7 +217,7 @@ int kqueue_poller_submit(poller p, const poller_event *event)
 int kqueue_poller_notify(poller p)
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
-    ASSERT(_p->kq > 0);
+    ASSERT(_p->kq >= 0);
 
     struct kevent kev[1];
     EV_SET(kev, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
