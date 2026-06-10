@@ -94,12 +94,14 @@ static void test_udp_loopback_round_trip(nanoev_test *test)
 
     TEST_EXPECT(test, nanoev_udp_addr(tc.udp, &addr) == NANOEV_ERROR_ACCESS_DENIED);
     TEST_EXPECT(test, nanoev_udp_addr(tc.udp, NULL) == NANOEV_ERROR_INVALID_ARG);
+    TEST_EXPECT(test, nanoev_udp_set_broadcast(tc.udp, 1) == NANOEV_ERROR_ACCESS_DENIED);
     TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", 0) == NANOEV_SUCCESS);
     ret = nanoev_udp_bind(tc.udp, &addr);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {
         goto cleanup;
     }
+    TEST_EXPECT(test, nanoev_udp_set_broadcast(tc.udp, 1) == NANOEV_SUCCESS);
     ret = nanoev_udp_addr(tc.udp, &addr);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {

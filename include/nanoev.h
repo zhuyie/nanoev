@@ -838,6 +838,22 @@ int nanoev_udp_getopt(
     int *optlen
     );
 
+/*
+ * nanoev_udp_set_broadcast
+ *   Enable or disable SO_BROADCAST on an open UDP socket.
+ *
+ * Parameters:
+ *   event   - UDP event.
+ *   enabled - Non-zero to enable, zero to disable.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ */
+int nanoev_udp_set_broadcast(
+    nanoev_event *event,
+    int enabled
+    );
+
 /*----------------------------------------------------------------------------*/
 
 /*

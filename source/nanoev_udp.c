@@ -27,6 +27,8 @@ static void udp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 static int create_udp_socket(nanoev_udp *udp, int family);
 static int sockaddr_len(nanoev_udp *udp);
+static int udp_set_option(nanoev_udp *udp, int level, int optname, const char *optval, int optlen);
+static int udp_set_int_option(nanoev_udp *udp, int level, int optname, int value);
 
 #define NANOEV_UDP_FLAG_WRITING      NANOEV_PROACTOR_FLAG_WRITING
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
@@ -363,16 +365,8 @@ int nanoev_udp_setopt(
     ASSERT(udp->type == nanoev_event_udp);
     ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
     ASSERT(in_loop_thread(udp->loop));
-    ASSERT(optval);
-    ASSERT(optlen >= 0);
 
-    if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
-        return NANOEV_ERROR_ACCESS_DENIED;
-
-    if (0 != setsockopt(udp->sock, level, optname, optval, optlen))
-        return NANOEV_ERROR_FAIL;
-
-    return NANOEV_SUCCESS;
+    return udp_set_option(udp, level, optname, optval, optlen);
 }
 
 int nanoev_udp_getopt(
@@ -399,6 +393,20 @@ int nanoev_udp_getopt(
         return NANOEV_ERROR_FAIL;
 
     return NANOEV_SUCCESS;
+}
+
+int nanoev_udp_set_broadcast(
+    nanoev_event *event,
+    int enabled
+    )
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(in_loop_thread(udp->loop));
+
+    return udp_set_int_option(udp, SOL_SOCKET, SO_BROADCAST, enabled ? 1 : 0);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -548,4 +556,28 @@ static int sockaddr_len(nanoev_udp *udp)
         ASSERT(udp->family == AF_INET6);
         return sizeof(struct sockaddr_in6);
     }
+}
+
+static int udp_set_option(nanoev_udp *udp, int level, int optname, const char *optval, int optlen)
+{
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+
+    if (!optval || optlen < 0)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (udp->sock == INVALID_SOCKET || udp->flags & NANOEV_UDP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != setsockopt(udp->sock, level, optname, optval, optlen)) {
+        udp->flags |= NANOEV_UDP_FLAG_ERROR;
+        udp->error_code = socket_last_error();
+        return NANOEV_ERROR_FAIL;
+    }
+
+    return NANOEV_SUCCESS;
+}
+
+static int udp_set_int_option(nanoev_udp *udp, int level, int optname, int value)
+{
+    return udp_set_option(udp, level, optname, (const char*)&value, sizeof(value));
 }
