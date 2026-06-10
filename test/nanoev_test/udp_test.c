@@ -89,23 +89,24 @@ static void test_udp_loopback_round_trip(nanoev_test *test)
 
     tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
     TEST_REQUIRE(test, tc.timer);
+    tc.udp = nanoev_event_new(nanoev_event_udp, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.udp);
 
-    for (port = 40217; port < 40237; port++) {
-        tc.udp = nanoev_event_new(nanoev_event_udp, tc.loop, &tc);
-        TEST_REQUIRE(test, tc.udp);
-        TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", port) == NANOEV_SUCCESS);
-        ret = nanoev_udp_bind(tc.udp, &addr);
-        if (ret == NANOEV_SUCCESS) {
-            break;
-        }
-        nanoev_event_free(tc.udp);
-        tc.udp = NULL;
-    }
-
-    TEST_EXPECT(test, tc.udp != NULL);
-    if (!tc.udp) {
+    TEST_EXPECT(test, nanoev_udp_addr(tc.udp, &addr) == NANOEV_ERROR_ACCESS_DENIED);
+    TEST_EXPECT(test, nanoev_udp_addr(tc.udp, NULL) == NANOEV_ERROR_INVALID_ARG);
+    TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", 0) == NANOEV_SUCCESS);
+    ret = nanoev_udp_bind(tc.udp, &addr);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
         goto cleanup;
     }
+    ret = nanoev_udp_addr(tc.udp, &addr);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
+    TEST_EXPECT(test, nanoev_addr_get_port(&addr, &port) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, port != 0);
 
     ret = nanoev_udp_read(tc.udp, tc.read_buf, sizeof(tc.read_buf), on_udp_read);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);

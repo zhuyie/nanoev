@@ -242,6 +242,37 @@ int nanoev_udp_bind(
     return NANOEV_SUCCESS;
 }
 
+int nanoev_udp_addr(
+    nanoev_event *event,
+    struct nanoev_addr *addr
+    )
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+    socklen_t len;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(!(udp->flags & NANOEV_UDP_FLAG_DELETED));
+    ASSERT(in_loop_thread(udp->loop));
+
+    if (!addr)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (udp->sock == INVALID_SOCKET
+        || udp->flags & NANOEV_UDP_FLAG_ERROR
+        || udp->flags & NANOEV_UDP_FLAG_DELETED
+        )
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    len = sockaddr_len(udp);
+    if (0 != getsockname(udp->sock, (struct sockaddr*)addr, &len)) {
+        udp->flags |= NANOEV_UDP_FLAG_ERROR;
+        udp->error_code = socket_last_error();
+        return NANOEV_ERROR_FAIL;
+    }
+
+    return NANOEV_SUCCESS;
+}
+
 int nanoev_udp_error(nanoev_event *event)
 {
     nanoev_udp *udp = (nanoev_udp*)event;

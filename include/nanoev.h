@@ -676,6 +676,26 @@ int nanoev_udp_bind(
     );
 
 /*
+ * nanoev_udp_addr
+ *   Return the local address for a UDP event.
+ *
+ * Parameters:
+ *   event - UDP event.
+ *   addr  - Output address.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   The UDP event must have an open socket, for example after
+ *   nanoev_udp_bind() or nanoev_udp_write().
+ */
+int nanoev_udp_addr(
+    nanoev_event *event,
+    struct nanoev_addr *addr
+    );
+
+/*
  * nanoev_udp_error
  *   Return the last socket error recorded on a UDP event.
  */
