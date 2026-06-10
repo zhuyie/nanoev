@@ -59,6 +59,13 @@ cleanly. Keep generated build artifacts out of commits.
   cancellation or timeout semantics in `include/nanoev.h`.
 - Keep `include/nanoev.hpp` as a thin C++ include wrapper.
 
+## Documentation
+
+Keep README feature lists concise and capability-level. Do not enumerate every
+helper or socket option there; put API-level details and edge-case semantics in
+`include/nanoev.h`, and reserve README usage notes for behavior users need to
+understand before adopting a feature.
+
 ## Threading
 
 Use the internal thread/mutex/condition wrappers instead of direct pthread or
