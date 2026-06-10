@@ -16,6 +16,8 @@ typedef struct tcp_case {
     int server_write_called;
     int client_write_called;
     int client_read_called;
+    int client_nodelay_result;
+    int client_keepalive_result;
     int client_shutdown_result;
     int timed_out;
     int callback_failures;
@@ -129,6 +131,13 @@ static void on_connect(
         tcp_note_failure(tc);
         return;
     }
+    tc->client_nodelay_result = nanoev_tcp_set_nodelay(tcp, 1);
+    tc->client_keepalive_result = nanoev_tcp_set_keepalive(tcp, 1);
+    if (tc->client_nodelay_result != NANOEV_SUCCESS
+        || tc->client_keepalive_result != NANOEV_SUCCESS) {
+        tcp_note_failure(tc);
+        return;
+    }
     if (nanoev_tcp_write(tcp, request, 4, on_client_write) != NANOEV_SUCCESS) {
         tcp_note_failure(tc);
     }
@@ -172,7 +181,11 @@ static void test_tcp_loopback_round_trip(nanoev_test *test)
     TEST_REQUIRE(test, tc.client);
     tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
     TEST_REQUIRE(test, tc.timer);
+    tc.client_nodelay_result = NANOEV_ERROR_FAIL;
+    tc.client_keepalive_result = NANOEV_ERROR_FAIL;
     tc.client_shutdown_result = NANOEV_ERROR_FAIL;
+    TEST_EXPECT(test, nanoev_tcp_set_nodelay(tc.client, 1) == NANOEV_ERROR_ACCESS_DENIED);
+    TEST_EXPECT(test, nanoev_tcp_set_keepalive(tc.client, 1) == NANOEV_ERROR_ACCESS_DENIED);
     TEST_EXPECT(test, nanoev_tcp_shutdown(tc.client, NANOEV_TCP_SHUT_WRITE) == NANOEV_ERROR_ACCESS_DENIED);
     TEST_EXPECT(test, nanoev_tcp_shutdown(tc.client, -1) == NANOEV_ERROR_INVALID_ARG);
 
@@ -220,6 +233,8 @@ static void test_tcp_loopback_round_trip(nanoev_test *test)
     TEST_EXPECT(test, tc.server_write_called == 1);
     TEST_EXPECT(test, tc.client_write_called == 1);
     TEST_EXPECT(test, tc.client_read_called == 1);
+    TEST_EXPECT(test, tc.client_nodelay_result == NANOEV_SUCCESS);
+    TEST_EXPECT(test, tc.client_keepalive_result == NANOEV_SUCCESS);
     TEST_EXPECT(test, tc.client_shutdown_result == NANOEV_SUCCESS);
 
 cleanup:

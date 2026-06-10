@@ -36,6 +36,8 @@ static nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int famil
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 static int create_tcp_socket(nanoev_tcp *tcp, int family);
 static int sockaddr_len(nanoev_tcp *tcp);
+static int tcp_set_option(nanoev_tcp *tcp, int level, int optname, const char *optval, int optlen);
+static int tcp_set_int_option(nanoev_tcp *tcp, int level, int optname, int value);
 
 #define NANOEV_TCP_FLAG_CONNECTED    (0x00000001)      /* connection established */
 #define NANOEV_TCP_FLAG_LISTENING    (0x00000002)      /* listening */
@@ -526,16 +528,8 @@ int nanoev_tcp_setopt(
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
     ASSERT(in_loop_thread(tcp->loop));
-    ASSERT(optval);
-    ASSERT(optlen >= 0);
 
-    if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
-        return NANOEV_ERROR_ACCESS_DENIED;
-
-    if (0 != setsockopt(tcp->sock, level, optname, optval, optlen))
-        return NANOEV_ERROR_FAIL;
-
-    return NANOEV_SUCCESS;
+    return tcp_set_option(tcp, level, optname, optval, optlen);
 }
 
 int nanoev_tcp_getopt(
@@ -562,6 +556,34 @@ int nanoev_tcp_getopt(
         return NANOEV_ERROR_FAIL;
 
     return NANOEV_SUCCESS;
+}
+
+int nanoev_tcp_set_nodelay(
+    nanoev_event *event,
+    int enabled
+    )
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)event;
+
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+    ASSERT(in_loop_thread(tcp->loop));
+
+    return tcp_set_int_option(tcp, IPPROTO_TCP, TCP_NODELAY, enabled ? 1 : 0);
+}
+
+int nanoev_tcp_set_keepalive(
+    nanoev_event *event,
+    int enabled
+    )
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)event;
+
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+    ASSERT(in_loop_thread(tcp->loop));
+
+    return tcp_set_int_option(tcp, SOL_SOCKET, SO_KEEPALIVE, enabled ? 1 : 0);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -880,4 +902,28 @@ static int sockaddr_len(nanoev_tcp *tcp)
         ASSERT(tcp->family == AF_INET6);
         return sizeof(struct sockaddr_in6);
     }
+}
+
+static int tcp_set_option(nanoev_tcp *tcp, int level, int optname, const char *optval, int optlen)
+{
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+
+    if (!optval || optlen < 0)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (tcp->sock == INVALID_SOCKET || tcp->flags & NANOEV_TCP_FLAG_DELETED)
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != setsockopt(tcp->sock, level, optname, optval, optlen)) {
+        tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+        tcp->error_code = socket_last_error();
+        return NANOEV_ERROR_FAIL;
+    }
+
+    return NANOEV_SUCCESS;
+}
+
+static int tcp_set_int_option(nanoev_tcp *tcp, int level, int optname, int value)
+{
+    return tcp_set_option(tcp, level, optname, (const char*)&value, sizeof(value));
 }

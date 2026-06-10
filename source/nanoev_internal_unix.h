@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <sys/time.h>
 #include <pthread.h>
 

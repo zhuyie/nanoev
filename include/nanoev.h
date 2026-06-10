@@ -609,6 +609,38 @@ int nanoev_tcp_getopt(
     int *optlen
     );
 
+/*
+ * nanoev_tcp_set_nodelay
+ *   Enable or disable TCP_NODELAY on an open TCP socket.
+ *
+ * Parameters:
+ *   event   - TCP event.
+ *   enabled - Non-zero to enable, zero to disable.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ */
+int nanoev_tcp_set_nodelay(
+    nanoev_event *event,
+    int enabled
+    );
+
+/*
+ * nanoev_tcp_set_keepalive
+ *   Enable or disable SO_KEEPALIVE on an open TCP socket.
+ *
+ * Parameters:
+ *   event   - TCP event.
+ *   enabled - Non-zero to enable, zero to disable.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ */
+int nanoev_tcp_set_keepalive(
+    nanoev_event *event,
+    int enabled
+    );
+
 /*----------------------------------------------------------------------------*/
 
 /*
