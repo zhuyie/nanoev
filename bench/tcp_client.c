@@ -158,11 +158,7 @@ int bench_tcp_client_run(const bench_config *config)
     if (ret != NANOEV_SUCCESS)
         goto fail;
 
-    {
-        nanoev_timeval ended;
-        nanoev_now(&ended);
-        bench_stats_print_total("client", &client.stats, bench_time_diff_ms(&client.started, &ended));
-    }
+    bench_stats_print_total("client", &client.stats, (uint64_t)config->duration * 1000ULL);
 
     for (i = 0; i < config->connections; i++)
         conn_close(&client.connections[i]);

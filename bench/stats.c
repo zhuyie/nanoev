@@ -1,6 +1,7 @@
 #include "stats.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #define FORMAT_BUFFER_SIZE 32
 
@@ -81,13 +82,18 @@ static void format_mib(double value, char *buf, size_t size)
     snprintf(buf, size, "%.2f", value);
 }
 
-static void format_duration(uint64_t elapsed_ms, char *buf, size_t size)
+static void format_clock_time(char *buf, size_t size)
 {
-    if (elapsed_ms >= 1000) {
-        snprintf(buf, size, "%.2fs", (double)elapsed_ms / 1000.0);
-    } else {
-        snprintf(buf, size, "%llums", (unsigned long long)elapsed_ms);
-    }
+    time_t now = time(NULL);
+    struct tm tm_now;
+
+#ifdef _WIN32
+    localtime_s(&tm_now, &now);
+#else
+    localtime_r(&now, &tm_now);
+#endif
+
+    snprintf(buf, size, "%02d:%02d:%02d", tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
 }
 
 void bench_stats_init(bench_stats *stats)
@@ -123,8 +129,8 @@ void bench_stats_record_latency(bench_stats *stats, uint64_t latency_us)
 void bench_stats_print_delta_header(const char *prefix)
 {
     printf("\n[%s] interval stats\n", prefix);
-    printf("  %-9s %12s %10s %12s %14s %10s\n",
-        "elapsed", "req/s", "MiB", "requests", "total", "errors");
+    printf("  %-8s %12s %10s %12s %14s %10s\n",
+        "time", "req/s", "MiB", "requests", "total", "errors");
 }
 
 void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const bench_stats *previous, uint64_t elapsed_ms)
@@ -133,22 +139,22 @@ void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const
     uint64_t bytes = stats->bytes - previous->bytes;
     uint64_t errors = stats->errors - previous->errors;
     double seconds = elapsed_ms ? (double)elapsed_ms / 1000.0 : 1.0;
-    char elapsed_buf[FORMAT_BUFFER_SIZE];
+    char time_buf[FORMAT_BUFFER_SIZE];
     char rate_buf[FORMAT_BUFFER_SIZE];
     char mib_buf[FORMAT_BUFFER_SIZE];
     char requests_buf[FORMAT_BUFFER_SIZE];
     char total_buf[FORMAT_BUFFER_SIZE];
     char errors_buf[FORMAT_BUFFER_SIZE];
 
-    format_duration(elapsed_ms, elapsed_buf, sizeof(elapsed_buf));
+    format_clock_time(time_buf, sizeof(time_buf));
     format_rate((double)requests / seconds, rate_buf, sizeof(rate_buf));
     format_mib((double)bytes / (1024.0 * 1024.0), mib_buf, sizeof(mib_buf));
     format_count(requests, requests_buf, sizeof(requests_buf));
     format_count(stats->requests, total_buf, sizeof(total_buf));
     format_count(errors, errors_buf, sizeof(errors_buf));
 
-    printf("  %-9s %12s %10s %12s %14s %10s\n",
-        elapsed_buf, rate_buf, mib_buf, requests_buf, total_buf, errors_buf);
+    printf("  %-8s %12s %10s %12s %14s %10s\n",
+        time_buf, rate_buf, mib_buf, requests_buf, total_buf, errors_buf);
 }
 
 void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint64_t elapsed_ms)
@@ -163,7 +169,11 @@ void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint6
     char mib_buf[FORMAT_BUFFER_SIZE];
     char mib_rate_buf[FORMAT_BUFFER_SIZE];
 
-    format_duration(elapsed_ms, duration_buf, sizeof(duration_buf));
+    if (elapsed_ms >= 1000) {
+        snprintf(duration_buf, sizeof(duration_buf), "%.2fs", (double)elapsed_ms / 1000.0);
+    } else {
+        snprintf(duration_buf, sizeof(duration_buf), "%llums", (unsigned long long)elapsed_ms);
+    }
     format_count(stats->requests, requests_buf, sizeof(requests_buf));
     format_count(stats->errors, errors_buf, sizeof(errors_buf));
     format_rate((double)stats->requests / seconds, rate_buf, sizeof(rate_buf));

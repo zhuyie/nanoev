@@ -43,8 +43,8 @@ Example client output:
 
 ```text
 [client] interval stats
-  elapsed          req/s        MiB     requests          total     errors
-  1.00s        121.76k/s       8.36      121,764        121,764          0
+  time            req/s        MiB     requests          total     errors
+  14:23:08     121.76k/s       8.36      121,764        121,764          0
 
 [client] summary
   duration : 1.00s
