@@ -8,7 +8,8 @@
 typedef enum {
     NANOEV_TCP_TIMEOUT_NONE = 0,
     NANOEV_TCP_TIMEOUT_CONNECT,
-    NANOEV_TCP_TIMEOUT_READ
+    NANOEV_TCP_TIMEOUT_READ,
+    NANOEV_TCP_TIMEOUT_WRITE
 } nanoev_tcp_timeout_op;
 
 typedef struct nanoev_tcp_timeout {
@@ -363,10 +364,12 @@ int nanoev_tcp_write(
     nanoev_event *event, 
     const void *buf, 
     unsigned int len, 
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_write callback
     )
 {
     nanoev_tcp *tcp = (nanoev_tcp*)event;
+    int write_pending = 0;
 #ifdef _WIN32
     DWORD cb;
 #endif
@@ -376,6 +379,8 @@ int nanoev_tcp_write(
     ASSERT(in_loop_thread(tcp->loop));
 
     if (!buf || !len || !callback)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (timeout && (timeout->tv_sec < 0 || timeout->tv_usec < 0 || timeout->tv_usec >= 1000000))
         return NANOEV_ERROR_INVALID_ARG;
     if (tcp->sock == INVALID_SOCKET
         || tcp->flags & NANOEV_TCP_FLAG_ERROR
@@ -390,12 +395,13 @@ int nanoev_tcp_write(
     memset(&tcp->ctx_write, 0, sizeof(io_context));
     
 #ifdef _WIN32
-    if (0 != WSASend(tcp->sock, &tcp->buf_write, 1, &cb, 0, &tcp->ctx_write, NULL)
-        && WSA_IO_PENDING != WSAGetLastError()
-        ) {
-        tcp->flags |= NANOEV_TCP_FLAG_ERROR;
-        tcp->error_code = WSAGetLastError();
-        return NANOEV_ERROR_FAIL;
+    if (0 != WSASend(tcp->sock, &tcp->buf_write, 1, &cb, 0, &tcp->ctx_write, NULL)) {
+        if (WSA_IO_PENDING != WSAGetLastError()) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = WSAGetLastError();
+            return NANOEV_ERROR_FAIL;
+        }
+        write_pending = 1;
     }
 #else
     int ret = write(tcp->sock, buf, len);
@@ -407,6 +413,7 @@ int nanoev_tcp_write(
             tcp->error_code = ENOMEM;
             return NANOEV_ERROR_FAIL;
         }
+        write_pending = 0;
     } else {
         if (!socket_would_block(errno)) {
             tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -419,8 +426,18 @@ int nanoev_tcp_write(
             tcp->error_code = errno;
             return NANOEV_ERROR_FAIL;
         }
+        write_pending = 1;
     }
 #endif
+
+    if (timeout && write_pending) {
+        int ret_code = tcp_timeout_add(tcp, &tcp->timeout_write, NANOEV_TCP_TIMEOUT_WRITE, timeout);
+        if (ret_code != NANOEV_SUCCESS) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = ENOMEM;
+            return NANOEV_ERROR_FAIL;
+        }
+    }
 
     tcp->flags |= NANOEV_TCP_FLAG_WRITING;
     tcp->on_write = callback;
@@ -719,12 +736,30 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         } else {
             /* a send operation is completed */
             ASSERT(&tcp->ctx_write == ctx);
-            ASSERT(tcp->flags & NANOEV_TCP_FLAG_WRITING);
+            if (!(tcp->flags & NANOEV_TCP_FLAG_WRITING)) {
+                /*
+                 * Reactor backends clear WRITING when the write timeout fires.
+                 * The poller may already have queued a writable event before
+                 * interest was removed, so a stale event can still arrive here.
+                 */
+                tcp->error_code = socket_timeout_error();
+                return;
+            }
             tcp->flags &= ~NANOEV_TCP_FLAG_WRITING;
             on_write = tcp->on_write;
             tcp->on_write = NULL;
+            tcp_timeout_del(tcp, &tcp->timeout_write);
+            if (!on_write) {
+                /*
+                 * IOCP keeps WRITING set after timeout because the overlapped
+                 * write must still complete after close_socket(). The timeout
+                 * path already called the user callback and cleared on_write;
+                 * this late completion only releases the outstanding I/O flag.
+                 */
+                tcp->error_code = socket_timeout_error();
+                return;
+            }
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
-                ASSERT(on_write);
                 on_write((nanoev_event*)tcp, status, tcp->buf_write.buf, bytes);
             }
         }
@@ -898,6 +933,8 @@ static void tcp_timeout_write_callback(nanoev_timer_node *node)
     nanoev_tcp_timeout *timeout;
     nanoev_tcp *tcp;
     nanoev_tcp_on_connect on_connect;
+    nanoev_tcp_on_write on_write;
+    nanoev_tcp_timeout_op op;
     int status;
 
     ASSERT(node);
@@ -905,12 +942,13 @@ static void tcp_timeout_write_callback(nanoev_timer_node *node)
     tcp = (nanoev_tcp*)node->userdata;
     ASSERT(tcp);
     timeout = &tcp->timeout_write;
-    if (timeout->op != NANOEV_TCP_TIMEOUT_CONNECT) {
+    op = timeout->op;
+    if (op != NANOEV_TCP_TIMEOUT_CONNECT && op != NANOEV_TCP_TIMEOUT_WRITE) {
         return;
     }
     timeout->op = NANOEV_TCP_TIMEOUT_NONE;
 
-    if (!(tcp->flags & NANOEV_TCP_FLAG_WRITING) || !tcp->on_connect) {
+    if (!(tcp->flags & NANOEV_TCP_FLAG_WRITING)) {
         return;
     }
 
@@ -918,8 +956,21 @@ static void tcp_timeout_write_callback(nanoev_timer_node *node)
     tcp->flags |= NANOEV_TCP_FLAG_ERROR;
     tcp->error_code = status;
 
-    on_connect = tcp->on_connect;
-    tcp->on_connect = NULL;
+    on_connect = NULL;
+    on_write = NULL;
+    if (op == NANOEV_TCP_TIMEOUT_CONNECT) {
+        on_connect = tcp->on_connect;
+        if (!on_connect) {
+            return;
+        }
+        tcp->on_connect = NULL;
+    } else if (op == NANOEV_TCP_TIMEOUT_WRITE) {
+        on_write = tcp->on_write;
+        if (!on_write) {
+            return;
+        }
+        tcp->on_write = NULL;
+    }
 
 #ifndef _WIN32
     /*
@@ -937,7 +988,11 @@ static void tcp_timeout_write_callback(nanoev_timer_node *node)
     }
 
     if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
-        on_connect((nanoev_event*)tcp, status);
+        if (on_connect) {
+            on_connect((nanoev_event*)tcp, status);
+        } else if (on_write) {
+            on_write((nanoev_event*)tcp, status, tcp->buf_write.buf, 0);
+        }
     }
 }
 

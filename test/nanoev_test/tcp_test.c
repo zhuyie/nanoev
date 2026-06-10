@@ -95,7 +95,7 @@ static void on_server_read(
         tcp_note_failure(tc);
         return;
     }
-    if (nanoev_tcp_write(tcp, reply, 4, on_server_write) != NANOEV_SUCCESS) {
+    if (nanoev_tcp_write(tcp, reply, 4, NULL, on_server_write) != NANOEV_SUCCESS) {
         tcp_note_failure(tc);
     }
 }
@@ -140,7 +140,7 @@ static void on_connect(
         tcp_note_failure(tc);
         return;
     }
-    if (nanoev_tcp_write(tcp, request, 4, on_client_write) != NANOEV_SUCCESS) {
+    if (nanoev_tcp_write(tcp, request, 4, NULL, on_client_write) != NANOEV_SUCCESS) {
         tcp_note_failure(tc);
     }
 }
