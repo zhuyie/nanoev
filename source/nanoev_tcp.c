@@ -428,6 +428,37 @@ int nanoev_tcp_read(
     return NANOEV_SUCCESS;
 }
 
+int nanoev_tcp_shutdown(
+    nanoev_event *event,
+    int how
+    )
+{
+    nanoev_tcp *tcp = (nanoev_tcp*)event;
+
+    ASSERT(tcp);
+    ASSERT(tcp->type == nanoev_event_tcp);
+    ASSERT(in_loop_thread(tcp->loop));
+
+    if (how != NANOEV_TCP_SHUT_READ
+        && how != NANOEV_TCP_SHUT_WRITE
+        && how != NANOEV_TCP_SHUT_BOTH)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (tcp->sock == INVALID_SOCKET
+        || tcp->flags & NANOEV_TCP_FLAG_ERROR
+        || tcp->flags & NANOEV_TCP_FLAG_DELETED
+        || !(tcp->flags & NANOEV_TCP_FLAG_CONNECTED)
+        )
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (0 != shutdown(tcp->sock, how)) {
+        tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+        tcp->error_code = socket_last_error();
+        return NANOEV_ERROR_FAIL;
+    }
+
+    return NANOEV_SUCCESS;
+}
+
 int nanoev_tcp_addr(
     nanoev_event *event, 
     int local, 

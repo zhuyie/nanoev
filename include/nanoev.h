@@ -399,6 +399,16 @@ typedef void (*nanoev_tcp_on_read)(
     unsigned int bytes
     );
 
+#ifdef _WIN32
+#  define NANOEV_TCP_SHUT_READ  SD_RECEIVE
+#  define NANOEV_TCP_SHUT_WRITE SD_SEND
+#  define NANOEV_TCP_SHUT_BOTH  SD_BOTH
+#else
+#  define NANOEV_TCP_SHUT_READ  SHUT_RD
+#  define NANOEV_TCP_SHUT_WRITE SHUT_WR
+#  define NANOEV_TCP_SHUT_BOTH  SHUT_RDWR
+#endif
+
 /*
  * nanoev_tcp_connect
  *   Start a non-blocking TCP connection.
@@ -502,6 +512,27 @@ int nanoev_tcp_read(
     void *buf, 
     unsigned int len,
     nanoev_tcp_on_read callback
+    );
+
+/*
+ * nanoev_tcp_shutdown
+ *   Shut down reads, writes, or both directions on a connected TCP event.
+ *
+ * Parameters:
+ *   event - TCP event.
+ *   how   - NANOEV_TCP_SHUT_READ, NANOEV_TCP_SHUT_WRITE, or
+ *           NANOEV_TCP_SHUT_BOTH.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   The TCP event must be connected. Pending read or write callbacks may still
+ *   complete after shutdown according to platform socket semantics.
+ */
+int nanoev_tcp_shutdown(
+    nanoev_event *event,
+    int how
     );
 
 /*
