@@ -132,7 +132,7 @@ int main(int argc, char* argv[])
     tcp = nanoev_event_new(nanoev_event_tcp, loop, c);
     ASSERT(tcp);
     nanoev_addr_init(&server_addr, family, addr, port);
-    ret_code = nanoev_tcp_connect(tcp, &server_addr, on_connect);
+    ret_code = nanoev_tcp_connect(tcp, &server_addr, NULL, on_connect);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
     ret_code = nanoev_loop_run(loop);

@@ -36,7 +36,7 @@ nanoev_event* timer_new(nanoev_loop *loop, void *userdata)
     timer->type = nanoev_event_timer;
     timer->loop = loop;
     timer->userdata = userdata;
-    timer_node_init(&timer->node, timer_event_node_callback);
+    timer_node_init(&timer->node, timer_event_node_callback, timer);
 
     return (nanoev_event*)timer;
 }
@@ -126,7 +126,7 @@ int nanoev_timer_del(
 
 /*----------------------------------------------------------------------------*/
 
-void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callback)
+void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callback, void *userdata)
 {
     ASSERT(node);
     ASSERT(callback);
@@ -134,6 +134,7 @@ void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callbac
     memset(node, 0, sizeof(*node));
     node->min_heap_idx = (unsigned int)-1;
     node->callback = callback;
+    node->userdata = userdata;
 }
 
 int timer_node_active(nanoev_timer_node *node)
@@ -244,7 +245,8 @@ static void timer_event_node_callback(nanoev_timer_node *node)
 
     ASSERT(node);
 
-    timer = (nanoev_timer*)((char*)node - offsetof(nanoev_timer, node));
+    timer = (nanoev_timer*)node->userdata;
+    ASSERT(timer);
 
     timer->flags |= NANOEV_TIMER_FLAG_INVOKING_CALLBACK;
     timer->callback((nanoev_event*)timer);

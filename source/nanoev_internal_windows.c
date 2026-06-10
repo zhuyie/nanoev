@@ -251,6 +251,11 @@ int socket_last_error(void)
     return WSAGetLastError();
 }
 
+int socket_timeout_error(void)
+{
+    return WSAETIMEDOUT;
+}
+
 /*----------------------------------------------------------------------------*/
 
 #define NTSTATUS LONG

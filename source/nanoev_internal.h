@@ -74,6 +74,7 @@ struct nanoev_timer_node {
     unsigned int min_heap_idx;
     nanoev_timeval timeout;
     nanoev_timer_node_callback callback;
+    void *userdata;
 };
 
 typedef struct timer_min_heap {
@@ -82,7 +83,7 @@ typedef struct timer_min_heap {
     unsigned int size;
 } timer_min_heap;
 
-void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callback);
+void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callback, void *userdata);
 int  timer_node_active(nanoev_timer_node *node);
 int  timer_node_add(timer_min_heap *heap, nanoev_timer_node *node, const nanoev_timeval *timeout);
 void timer_node_del(timer_min_heap *heap, nanoev_timer_node *node);
@@ -166,6 +167,7 @@ int  submit_fake_io(nanoev_loop *loop, nanoev_proactor *proactor, io_context *ct
 int  set_non_blocking(SOCKET sock, int set);
 void close_socket(SOCKET sock);
 int  socket_last_error(void);
+int  socket_timeout_error(void);
 #ifndef _WIN32
 int  socket_would_block(int error_code);
 #endif

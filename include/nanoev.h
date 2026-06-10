@@ -437,14 +437,21 @@ typedef void (*nanoev_tcp_on_read)(
  * Parameters:
  *   event       - TCP event.
  *   server_addr - Remote address.
+ *   timeout     - Timeout duration, or NULL for no timeout.
  *   callback    - Completion callback.
  *
  * Returns:
  *   NANOEV_SUCCESS if the operation was started, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   If timeout is not NULL and expires first, callback receives the platform
+ *   socket timeout error, such as ETIMEDOUT or WSAETIMEDOUT. The TCP event
+ *   enters the error state and should be freed.
  */
 int nanoev_tcp_connect(
     nanoev_event *event, 
     const struct nanoev_addr *server_addr,
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_connect callback
     );
 
