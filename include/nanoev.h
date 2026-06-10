@@ -437,14 +437,21 @@ typedef void (*nanoev_tcp_on_read)(
  * Parameters:
  *   event       - TCP event.
  *   server_addr - Remote address.
+ *   timeout     - Timeout duration, or NULL for no timeout.
  *   callback    - Completion callback.
  *
  * Returns:
  *   NANOEV_SUCCESS if the operation was started, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   If timeout is not NULL and expires first, callback receives the platform
+ *   socket timeout error, such as ETIMEDOUT or WSAETIMEDOUT. The TCP event
+ *   enters the error state and should be freed.
  */
 int nanoev_tcp_connect(
     nanoev_event *event, 
     const struct nanoev_addr *server_addr,
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_connect callback
     );
 
@@ -472,6 +479,7 @@ int nanoev_tcp_listen(
  *
  * Parameters:
  *   event          - Listening TCP event.
+ *   timeout        - Timeout duration, or NULL for no timeout.
  *   callback       - Completion callback.
  *   alloc_userdata - Optional userdata allocator for accepted events.
  *
@@ -479,10 +487,14 @@ int nanoev_tcp_listen(
  *   NANOEV_SUCCESS if the operation was started, otherwise a NANOEV_ERROR_* code.
  *
  * Notes:
- *   At most one accept may be pending on an event at a time.
+ *   At most one accept may be pending on an event at a time. If timeout is
+ *   not NULL and expires first, callback receives the platform socket timeout
+ *   error, such as ETIMEDOUT or WSAETIMEDOUT, and tcp_new is NULL. The
+ *   listening TCP event enters the error state and should be freed.
  */
 int nanoev_tcp_accept(
     nanoev_event *event, 
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_accept callback,
     nanoev_tcp_alloc_userdata alloc_userdata
     );
@@ -495,6 +507,7 @@ int nanoev_tcp_accept(
  *   event    - TCP event.
  *   buf      - Data buffer.
  *   len      - Number of bytes to write.
+ *   timeout  - Timeout duration, or NULL for no timeout.
  *   callback - Completion callback.
  *
  * Returns:
@@ -502,12 +515,15 @@ int nanoev_tcp_accept(
  *
  * Notes:
  *   buf must remain valid until callback runs. At most one write may be pending
- *   on an event at a time.
+ *   on an event at a time. If timeout is not NULL and expires first, callback
+ *   receives the platform socket timeout error, such as ETIMEDOUT or
+ *   WSAETIMEDOUT. The TCP event enters the error state and should be freed.
  */
 int nanoev_tcp_write(
     nanoev_event *event, 
     const void *buf, 
     unsigned int len,
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_write callback
     );
 
@@ -519,6 +535,7 @@ int nanoev_tcp_write(
  *   event    - TCP event.
  *   buf      - Receive buffer.
  *   len      - Maximum number of bytes to read.
+ *   timeout  - Timeout duration, or NULL for no timeout.
  *   callback - Completion callback.
  *
  * Returns:
@@ -526,12 +543,15 @@ int nanoev_tcp_write(
  *
  * Notes:
  *   buf must remain valid until callback runs. At most one read may be pending
- *   on an event at a time.
+ *   on an event at a time. If timeout is not NULL and expires first, callback
+ *   receives the platform socket timeout error, such as ETIMEDOUT or
+ *   WSAETIMEDOUT. The TCP event enters the error state and should be freed.
  */
 int nanoev_tcp_read(
     nanoev_event *event, 
     void *buf, 
     unsigned int len,
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_read callback
     );
 

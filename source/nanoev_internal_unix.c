@@ -146,6 +146,11 @@ int socket_last_error(void)
     return errno;
 }
 
+int socket_timeout_error(void)
+{
+    return ETIMEDOUT;
+}
+
 int socket_would_block(int error_code)
 {
     return error_code == EAGAIN || error_code == EWOULDBLOCK;

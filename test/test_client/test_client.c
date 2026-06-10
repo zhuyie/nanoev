@@ -132,7 +132,7 @@ int main(int argc, char* argv[])
     tcp = nanoev_event_new(nanoev_event_tcp, loop, c);
     ASSERT(tcp);
     nanoev_addr_init(&server_addr, family, addr, port);
-    ret_code = nanoev_tcp_connect(tcp, &server_addr, on_connect);
+    ret_code = nanoev_tcp_connect(tcp, &server_addr, NULL, on_connect);
     ASSERT(ret_code == NANOEV_SUCCESS);
 
     ret_code = nanoev_loop_run(loop);
@@ -250,7 +250,7 @@ static void on_connect(
         printf("write_to_buf failed\n");
         return;
     }
-    ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, on_write);
+    ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, NULL, on_write);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_write failed, code = %d\n", ret_code);
         return;
@@ -282,7 +282,7 @@ static void on_write(
     c->out_buf_sent += bytes;
 
     if (c->out_buf_sent < c->out_buf_size) {
-        ret_code = nanoev_tcp_write(tcp, c->out_buf + c->out_buf_sent, c->out_buf_size - c->out_buf_sent, on_write);
+        ret_code = nanoev_tcp_write(tcp, c->out_buf + c->out_buf_sent, c->out_buf_size - c->out_buf_sent, NULL, on_write);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_write failed, code = %d\n", ret_code);
             return;
@@ -295,7 +295,7 @@ static void on_write(
             printf("ensure_in_buf failed\n");
             return;
         }
-        ret_code = nanoev_tcp_read(tcp, c->in_buf, c->in_buf_capacity, on_read);
+        ret_code = nanoev_tcp_read(tcp, c->in_buf, c->in_buf_capacity, NULL, on_read);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_read failed, code = %d\n", ret_code);
             return;
@@ -338,7 +338,7 @@ static void on_read(
             printf("ensure_in_buf failed\n");
             return;
         }
-        ret_code = nanoev_tcp_read(tcp, c->in_buf + c->in_buf_size, bytes, on_read);
+        ret_code = nanoev_tcp_read(tcp, c->in_buf + c->in_buf_size, bytes, NULL, on_read);
         if (ret_code != NANOEV_SUCCESS) {
             printf("nanoev_tcp_read failed, code = %d\n", ret_code);
             return;
@@ -357,7 +357,7 @@ static void on_read(
                 printf("write_to_buf failed\n");
                 return;
             }
-            ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, on_write);
+            ret_code = nanoev_tcp_write(tcp, c->out_buf, c->out_buf_size, NULL, on_write);
             if (ret_code != NANOEV_SUCCESS) {
                 printf("nanoev_tcp_write failed, code = %d\n", ret_code);
                 return;
