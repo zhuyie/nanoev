@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
     nanoev_addr_init(&local_addr, family, addr, port);
     ret_code = nanoev_tcp_listen(tcp, &local_addr, 5);
     ASSERT(ret_code == NANOEV_SUCCESS);
-    ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
+    ret_code = nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata);
     ASSERT(ret_code == NANOEV_SUCCESS);
     printf("Listening at %s:%d\n", addr, (int)port);
 
@@ -299,7 +299,7 @@ ON_ACCEPT_ERROR:
         client_free(c);
     }
 
-    ret_code = nanoev_tcp_accept(tcp, on_accept, alloc_userdata);
+    ret_code = nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata);
     if (ret_code != NANOEV_SUCCESS) {
         printf("nanoev_tcp_accept failed, code = %u\n", ret_code);
         return;

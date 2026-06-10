@@ -479,6 +479,7 @@ int nanoev_tcp_listen(
  *
  * Parameters:
  *   event          - Listening TCP event.
+ *   timeout        - Timeout duration, or NULL for no timeout.
  *   callback       - Completion callback.
  *   alloc_userdata - Optional userdata allocator for accepted events.
  *
@@ -486,10 +487,14 @@ int nanoev_tcp_listen(
  *   NANOEV_SUCCESS if the operation was started, otherwise a NANOEV_ERROR_* code.
  *
  * Notes:
- *   At most one accept may be pending on an event at a time.
+ *   At most one accept may be pending on an event at a time. If timeout is
+ *   not NULL and expires first, callback receives the platform socket timeout
+ *   error, such as ETIMEDOUT or WSAETIMEDOUT, and tcp_new is NULL. The
+ *   listening TCP event enters the error state and should be freed.
  */
 int nanoev_tcp_accept(
     nanoev_event *event, 
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_accept callback,
     nanoev_tcp_alloc_userdata alloc_userdata
     );

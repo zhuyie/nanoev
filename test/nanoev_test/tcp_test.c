@@ -11,6 +11,7 @@ typedef struct tcp_case {
     char server_buf[4];
     char client_buf[4];
     int accepted_called;
+    int accept_status;
     int connect_called;
     int connect_status;
     int read_status;
@@ -238,6 +239,84 @@ static void on_accept_hold(
     nanoev_event_set_userdata(tcp_new, tc);
 }
 
+static void on_accept_timeout(
+    nanoev_event *tcp,
+    int status,
+    nanoev_event *tcp_new
+    )
+{
+    tcp_case *tc = (tcp_case*)nanoev_event_userdata(tcp);
+
+    tc->accepted_called++;
+    tc->accept_status = status;
+    if (tcp_new) {
+        tcp_note_failure(tc);
+        return;
+    }
+    nanoev_loop_break(tc->loop);
+}
+
+static void test_tcp_accept_timeout(nanoev_test *test)
+{
+    tcp_case tc;
+    struct nanoev_addr addr;
+    nanoev_timeval timeout;
+    int ret;
+
+    memset(&tc, 0, sizeof(tc));
+
+    TEST_REQUIRE(test, nanoev_init() == NANOEV_SUCCESS);
+    tc.loop = nanoev_loop_new(NULL);
+    TEST_REQUIRE(test, tc.loop);
+
+    tc.listener = nanoev_event_new(nanoev_event_tcp, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.listener);
+    tc.timer = nanoev_event_new(nanoev_event_timer, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.timer);
+
+    TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", 0) == NANOEV_SUCCESS);
+    ret = nanoev_tcp_listen(tc.listener, &addr, 1);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
+
+    timeout.tv_sec = -1;
+    timeout.tv_usec = 0;
+    TEST_EXPECT(test, nanoev_tcp_accept(tc.listener, &timeout, on_accept_timeout, NULL)
+        == NANOEV_ERROR_INVALID_ARG);
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    ret = nanoev_tcp_accept(tc.listener, &timeout, on_accept_timeout, NULL);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
+    ret = nanoev_timer_add(tc.timer, seconds(2), 0, on_tcp_timeout);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
+    TEST_EXPECT(test, nanoev_loop_run(tc.loop) == NANOEV_SUCCESS);
+
+    TEST_EXPECT(test, tc.timed_out == 0);
+    TEST_EXPECT(test, tc.callback_failures == 0);
+    TEST_EXPECT(test, tc.accepted_called == 1);
+    TEST_EXPECT(test, tc.accept_status != 0);
+    TEST_EXPECT(test, tc.accept_status == nanoev_tcp_error(tc.listener));
+
+cleanup:
+    if (tc.timer) {
+        nanoev_event_free(tc.timer);
+    }
+    if (tc.listener) {
+        nanoev_event_free(tc.listener);
+    }
+    nanoev_loop_free(tc.loop);
+    nanoev_term();
+}
+
 static void test_tcp_connect_timeout(nanoev_test *test)
 {
     tcp_case tc;
@@ -330,7 +409,7 @@ static void test_tcp_read_timeout(nanoev_test *test)
         goto cleanup;
     }
 
-    ret = nanoev_tcp_accept(tc.listener, on_accept_hold, NULL);
+    ret = nanoev_tcp_accept(tc.listener, NULL, on_accept_hold, NULL);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {
         goto cleanup;
@@ -422,7 +501,7 @@ static void test_tcp_loopback_round_trip(nanoev_test *test)
     TEST_EXPECT(test, nanoev_addr_get_port(&addr, &port) == NANOEV_SUCCESS);
     TEST_EXPECT(test, port != 0);
 
-    ret = nanoev_tcp_accept(tc.listener, on_accept, NULL);
+    ret = nanoev_tcp_accept(tc.listener, NULL, on_accept, NULL);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {
         goto cleanup;
@@ -470,7 +549,8 @@ cleanup:
 
 void test_tcp(nanoev_test *test)
 {
+    test_tcp_loopback_round_trip(test);
     test_tcp_connect_timeout(test);
     test_tcp_read_timeout(test);
-    test_tcp_loopback_round_trip(test);
+    test_tcp_accept_timeout(test);
 }
