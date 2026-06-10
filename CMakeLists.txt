@@ -6,6 +6,7 @@ include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
 option(NANOEV_BUILD_TESTS "Build nanoev example test programs" ON)
+option(NANOEV_BUILD_BENCHMARKS "Build nanoev benchmark program" OFF)
 
 set(NANOEV_COMMON_SOURCES
     source/nanoev_lib.c
@@ -124,4 +125,14 @@ if(NANOEV_BUILD_TESTS)
 
     add_executable(test_server test/test_server/test_server.c)
     target_link_libraries(test_server PRIVATE nanoev)
+endif()
+
+if(NANOEV_BUILD_BENCHMARKS)
+    add_executable(nanoev_bench
+        bench/main.c
+        bench/tcp_server.c
+        bench/tcp_client.c
+        bench/stats.c
+    )
+    target_link_libraries(nanoev_bench PRIVATE nanoev)
 endif()
