@@ -10,6 +10,7 @@
 #endif
 
 #include <assert.h>
+#include <stddef.h>
 #define ASSERT assert
 
 /*----------------------------------------------------------------------------*/
@@ -64,11 +65,27 @@ void thread_detach(thread_handle thread);
 
 /*----------------------------------------------------------------------------*/
 
+struct nanoev_timer_node;
+typedef struct nanoev_timer_node nanoev_timer_node;
+
+typedef void (*nanoev_timer_node_callback)(nanoev_timer_node *node);
+
+struct nanoev_timer_node {
+    unsigned int min_heap_idx;
+    nanoev_timeval timeout;
+    nanoev_timer_node_callback callback;
+};
+
 typedef struct timer_min_heap {
-    nanoev_event **events;
+    nanoev_timer_node **events;
     unsigned int capacity;
     unsigned int size;
 } timer_min_heap;
+
+void timer_node_init(nanoev_timer_node *node, nanoev_timer_node_callback callback);
+int  timer_node_active(nanoev_timer_node *node);
+int  timer_node_add(timer_min_heap *heap, nanoev_timer_node *node, const nanoev_timeval *timeout);
+void timer_node_del(timer_min_heap *heap, nanoev_timer_node *node);
 
 void timers_init(timer_min_heap *heap);
 void timers_term(timer_min_heap *heap);
