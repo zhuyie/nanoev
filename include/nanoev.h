@@ -23,6 +23,27 @@
 /*----------------------------------------------------------------------------*/
 
 /*
+ * nanoev_strerror
+ *   Return a message for a nanoev return code.
+ *
+ * Parameters:
+ *   error_code - NANOEV_SUCCESS or a NANOEV_ERROR_* code.
+ *
+ * Returns:
+ *   A static message for the nanoev return code, or "nanoev error: unknown"
+ *   for an unknown value.
+ *
+ * Notes:
+ *   This only names nanoev return codes. Socket callbacks and DNS callbacks may
+ *   report platform or resolver errors that should be interpreted separately.
+ */
+const char* nanoev_strerror(
+    int error_code
+    );
+
+/*----------------------------------------------------------------------------*/
+
+/*
  * nanoev_init
  *   Initialize process-wide nanoev platform state.
  *
