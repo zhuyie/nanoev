@@ -7,7 +7,7 @@ loop and platform-specific polling backends.
 ## Features
 
 - TCP connect, listen, accept, read, and write
-- UDP bind, read, and write
+- UDP bind, connect, read, and write
 - Async DNS resolution
 - One-shot and repeating timers
 - Cross-thread loop wakeups with async events
@@ -137,6 +137,12 @@ passed to the operation.
   `nanoev_async_send()`, which may be used to wake the loop from another thread.
 - TCP and UDP keep the API simple: schedule at most one pending read and one
   pending write on an event at a time.
+- TCP connect, accept, read, and write operations may take a timeout. When a
+  TCP operation times out, its callback receives the platform socket timeout
+  error and the TCP event enters the error state.
+- UDP may be connected to a default peer, allowing writes with a `NULL`
+  destination address and peer-filtered reads according to platform socket
+  semantics.
 - DNS resolution uses the system resolver on a fixed worker pool and reports
   completion on the loop thread. Freeing a DNS event with a pending resolve
   cancels the callback, but the worker may continue until the system resolver
