@@ -537,12 +537,19 @@ int nanoev_tcp_shutdown(
 
 /*
  * nanoev_tcp_addr
- *   Return the local or remote address for a connected TCP event.
+ *   Return the local or remote address for a TCP event.
  *
  * Parameters:
  *   event - TCP event.
  *   local - Non-zero for local address, zero for remote address.
  *   addr  - Output address.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   Connected TCP events support local and remote addresses. Listening TCP
+ *   events support local addresses only.
  */
 int nanoev_tcp_addr(
     nanoev_event *event, 

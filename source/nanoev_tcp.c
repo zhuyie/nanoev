@@ -473,13 +473,16 @@ int nanoev_tcp_addr(
     ASSERT(tcp->type == nanoev_event_tcp);
     ASSERT(!(tcp->flags & NANOEV_TCP_FLAG_DELETED));
     ASSERT(in_loop_thread(tcp->loop));
-    ASSERT(addr);
 
+    if (!addr)
+        return NANOEV_ERROR_INVALID_ARG;
     if (tcp->sock == INVALID_SOCKET
         || tcp->flags & NANOEV_TCP_FLAG_ERROR
         || tcp->flags & NANOEV_TCP_FLAG_DELETED
-        || !(tcp->flags & NANOEV_TCP_FLAG_CONNECTED)
         )
+        return NANOEV_ERROR_ACCESS_DENIED;
+    if (!(tcp->flags & NANOEV_TCP_FLAG_CONNECTED)
+        && (!(tcp->flags & NANOEV_TCP_FLAG_LISTENING) || !local))
         return NANOEV_ERROR_ACCESS_DENIED;
 
     len = sockaddr_len(tcp);

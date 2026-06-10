@@ -176,22 +176,24 @@ static void test_tcp_loopback_round_trip(nanoev_test *test)
     TEST_EXPECT(test, nanoev_tcp_shutdown(tc.client, NANOEV_TCP_SHUT_WRITE) == NANOEV_ERROR_ACCESS_DENIED);
     TEST_EXPECT(test, nanoev_tcp_shutdown(tc.client, -1) == NANOEV_ERROR_INVALID_ARG);
 
-    for (port = 40117; port < 40137; port++) {
-        tc.listener = nanoev_event_new(nanoev_event_tcp, tc.loop, &tc);
-        TEST_REQUIRE(test, tc.listener);
-        TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", port) == NANOEV_SUCCESS);
-        ret = nanoev_tcp_listen(tc.listener, &addr, 1);
-        if (ret == NANOEV_SUCCESS) {
-            break;
-        }
-        nanoev_event_free(tc.listener);
-        tc.listener = NULL;
-    }
-
-    TEST_EXPECT(test, tc.listener != NULL);
-    if (!tc.listener) {
+    tc.listener = nanoev_event_new(nanoev_event_tcp, tc.loop, &tc);
+    TEST_REQUIRE(test, tc.listener);
+    TEST_EXPECT(test, nanoev_tcp_addr(tc.listener, 1, &addr) == NANOEV_ERROR_ACCESS_DENIED);
+    TEST_EXPECT(test, nanoev_tcp_addr(tc.listener, 1, NULL) == NANOEV_ERROR_INVALID_ARG);
+    TEST_EXPECT(test, nanoev_addr_init(&addr, NANOEV_AF_INET, "127.0.0.1", 0) == NANOEV_SUCCESS);
+    ret = nanoev_tcp_listen(tc.listener, &addr, 1);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
         goto cleanup;
     }
+    TEST_EXPECT(test, nanoev_tcp_addr(tc.listener, 0, &addr) == NANOEV_ERROR_ACCESS_DENIED);
+    ret = nanoev_tcp_addr(tc.listener, 1, &addr);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
+    TEST_EXPECT(test, nanoev_addr_get_port(&addr, &port) == NANOEV_SUCCESS);
+    TEST_EXPECT(test, port != 0);
 
     ret = nanoev_tcp_accept(tc.listener, on_accept, NULL);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
