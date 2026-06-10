@@ -6,6 +6,8 @@ void test_async(nanoev_test *test);
 void test_dns(nanoev_test *test);
 void test_event(nanoev_test *test);
 void test_loop(nanoev_test *test);
+void test_tcp(nanoev_test *test);
+void test_udp(nanoev_test *test);
 void test_thread(nanoev_test *test);
 void test_timer(nanoev_test *test);
 
@@ -29,6 +31,8 @@ int main(void)
     test_dns(&test);
     test_event(&test);
     test_loop(&test);
+    test_tcp(&test);
+    test_udp(&test);
     test_thread(&test);
     test_timer(&test);
 

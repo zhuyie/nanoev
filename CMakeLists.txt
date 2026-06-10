@@ -69,6 +69,8 @@ if(NANOEV_BUILD_TESTS)
         test/nanoev_test/dns_test.c
         test/nanoev_test/event_test.c
         test/nanoev_test/loop_test.c
+        test/nanoev_test/tcp_test.c
+        test/nanoev_test/udp_test.c
         test/nanoev_test/thread_test.c
         test/nanoev_test/timer_test.c
     )
