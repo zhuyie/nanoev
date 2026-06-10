@@ -45,6 +45,17 @@ cmake -S . -B build -DNANOEV_BUILD_TESTS=OFF
 cmake --build build
 ```
 
+To install nanoev and consume it from another CMake project:
+
+```sh
+cmake --install build --prefix /path/to/prefix
+```
+
+```cmake
+find_package(nanoev CONFIG REQUIRED)
+target_link_libraries(app PRIVATE nanoev::nanoev)
+```
+
 On Windows, use a Visual Studio generator or run CMake from a Developer Command
 Prompt:
 

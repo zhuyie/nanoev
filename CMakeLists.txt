@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 project(nanoev VERSION 0.1.0 LANGUAGES C)
 
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
+
 option(NANOEV_BUILD_TESTS "Build nanoev example test programs" ON)
 
 set(NANOEV_COMMON_SOURCES
@@ -40,10 +43,12 @@ add_library(nanoev STATIC
     ${NANOEV_COMMON_SOURCES}
     ${NANOEV_PLATFORM_SOURCES}
 )
+add_library(nanoev::nanoev ALIAS nanoev)
 
 target_include_directories(nanoev
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 set_target_properties(nanoev PROPERTIES
@@ -58,6 +63,40 @@ else()
     find_package(Threads REQUIRED)
     target_link_libraries(nanoev PUBLIC Threads::Threads)
 endif()
+
+install(TARGETS nanoev
+    EXPORT nanoevTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(FILES
+    include/nanoev.h
+    include/nanoev.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(EXPORT nanoevTargets
+    FILE nanoevTargets.cmake
+    NAMESPACE nanoev::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nanoev
+)
+
+configure_package_config_file(
+    cmake/nanoevConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/nanoevConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nanoev
+)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/nanoevConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/nanoevConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/nanoevConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nanoev
+)
 
 if(NANOEV_BUILD_TESTS)
     enable_testing()
