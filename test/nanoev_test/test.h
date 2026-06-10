@@ -1,6 +1,8 @@
 #ifndef NANOEV_TEST_H
 #define NANOEV_TEST_H
 
+#include <stddef.h>
+
 typedef struct nanoev_test {
     int checks;
     int failures;
