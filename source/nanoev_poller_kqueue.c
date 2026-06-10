@@ -184,8 +184,6 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         	events[count1].proactor = proactor;
         	events[count1].ctx = ctx;
         	count1++;
-        } else {
-            printf("kqueue_poller_poll reactor_cb return NULL\n");
         }
     }
     //printf("kqueue_poller_poll read %d events\n", count);
