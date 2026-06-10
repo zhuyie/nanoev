@@ -7,7 +7,8 @@
 
 typedef enum {
     NANOEV_TCP_TIMEOUT_NONE = 0,
-    NANOEV_TCP_TIMEOUT_CONNECT
+    NANOEV_TCP_TIMEOUT_CONNECT,
+    NANOEV_TCP_TIMEOUT_READ
 } nanoev_tcp_timeout_op;
 
 typedef struct nanoev_tcp_timeout {
@@ -32,6 +33,7 @@ struct nanoev_tcp {
             SOCKET socket_accept;
         };
     };
+    nanoev_tcp_timeout timeout_read;
     nanoev_tcp_timeout timeout_write;
     unsigned char *accept_addr_buf;
     /* callback functions */
@@ -43,6 +45,7 @@ struct nanoev_tcp {
 typedef struct nanoev_tcp nanoev_tcp;
 
 static void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
+static void tcp_timeout_read_callback(nanoev_timer_node *node);
 static void tcp_timeout_write_callback(nanoev_timer_node *node);
 static nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCKET socket);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
@@ -79,6 +82,7 @@ nanoev_event* tcp_new(nanoev_loop *loop, void *userdata)
     tcp->loop = loop;
     tcp->userdata = userdata;
     tcp->cb = tcp_proactor_callback;
+    tcp_timeout_init(&tcp->timeout_read, tcp_timeout_read_callback, tcp);
     tcp_timeout_init(&tcp->timeout_write, tcp_timeout_write_callback, tcp);
 #ifndef _WIN32
     tcp->reactor_cb = reactor_cb;
@@ -94,6 +98,7 @@ void tcp_free(nanoev_event *event)
 
     ASSERT(tcp->type == nanoev_event_tcp);
 
+    tcp_timeout_del(tcp, &tcp->timeout_read);
     tcp_timeout_del(tcp, &tcp->timeout_write);
 
     if (tcp->sock != INVALID_SOCKET) {
@@ -203,7 +208,7 @@ int nanoev_tcp_connect(
     return NANOEV_SUCCESS;
 
 ERROR_EXIT:
-    if (timeout)
+    if (timeout && connect_pending)
         tcp_timeout_del(tcp, &tcp->timeout_write);
     tcp->error_code = error_code;
     tcp->flags |= NANOEV_TCP_FLAG_ERROR;
@@ -427,6 +432,7 @@ int nanoev_tcp_read(
     nanoev_event *event, 
     void *buf, 
     unsigned int len, 
+    const nanoev_timeval *timeout,
     nanoev_tcp_on_read callback
     )
 {
@@ -440,6 +446,8 @@ int nanoev_tcp_read(
     ASSERT(in_loop_thread(tcp->loop));
 
     if (!buf || !len || !callback)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (timeout && (timeout->tv_sec < 0 || timeout->tv_usec < 0 || timeout->tv_usec >= 1000000))
         return NANOEV_ERROR_INVALID_ARG;
     if (tcp->sock == INVALID_SOCKET
         || tcp->flags & NANOEV_TCP_FLAG_ERROR
@@ -462,6 +470,15 @@ int nanoev_tcp_read(
         return NANOEV_ERROR_FAIL;
     }
 #endif
+
+    if (timeout) {
+        int ret_code = tcp_timeout_add(tcp, &tcp->timeout_read, NANOEV_TCP_TIMEOUT_READ, timeout);
+        if (ret_code != NANOEV_SUCCESS) {
+            tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+            tcp->error_code = ENOMEM;
+            return NANOEV_ERROR_FAIL;
+        }
+    }
 
     tcp->flags |= NANOEV_TCP_FLAG_READING;
     tcp->on_read = callback;
@@ -672,12 +689,30 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
     if (tcp->flags & NANOEV_TCP_FLAG_CONNECTED) {
         if (&tcp->ctx_read == ctx) {
             /* a recv operation is completed */
-            ASSERT(tcp->flags & NANOEV_TCP_FLAG_READING);
+            if (!(tcp->flags & NANOEV_TCP_FLAG_READING)) {
+                /*
+                 * Reactor backends clear READING when the read timeout fires.
+                 * The poller may already have queued a read event before
+                 * interest was removed, so a stale event can still arrive here.
+                 */
+                tcp->error_code = socket_timeout_error();
+                return;
+            }
             tcp->flags &= ~NANOEV_TCP_FLAG_READING;
             on_read = tcp->on_read;
             tcp->on_read = NULL;
+            tcp_timeout_del(tcp, &tcp->timeout_read);
+            if (!on_read) {
+                /*
+                 * IOCP keeps READING set after timeout because the overlapped
+                 * read must still complete after close_socket(). The timeout
+                 * path already called the user callback and cleared on_read;
+                 * this late completion only releases the outstanding I/O flag.
+                 */
+                tcp->error_code = socket_timeout_error();
+                return;
+            }
             if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
-                ASSERT(on_read);
                 on_read((nanoev_event*)tcp, status, tcp->buf_read.buf, bytes);
             }
 
@@ -763,6 +798,13 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
         } else {
             /* a connect operation is completed */
             if (!(tcp->flags & NANOEV_TCP_FLAG_WRITING)) {
+                /*
+                 * Reactor backends clear WRITING when the connect timeout
+                 * fires. The poller may already have queued a writable event
+                 * before interest was removed, so a stale event can still
+                 * arrive here.
+                 */
+                tcp->error_code = socket_timeout_error();
                 return;
             }
             tcp->flags &= ~NANOEV_TCP_FLAG_WRITING;
@@ -772,6 +814,12 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
             tcp_timeout_del(tcp, &tcp->timeout_write);
 
             if (!on_connect) {
+                /*
+                 * IOCP keeps WRITING set after timeout because ConnectEx must
+                 * still complete after close_socket(). The timeout path already
+                 * called the user callback and cleared on_connect; this late
+                 * completion only releases the outstanding I/O flag.
+                 */
                 tcp->error_code = socket_timeout_error();
                 return;
             }
@@ -797,6 +845,51 @@ void tcp_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
                 on_connect((nanoev_event*)tcp, status);
             }
         }
+    }
+}
+
+static void tcp_timeout_read_callback(nanoev_timer_node *node)
+{
+    nanoev_tcp_timeout *timeout;
+    nanoev_tcp *tcp;
+    nanoev_tcp_on_read on_read;
+    int status;
+
+    ASSERT(node);
+
+    tcp = (nanoev_tcp*)node->userdata;
+    ASSERT(tcp);
+    timeout = &tcp->timeout_read;
+    if (timeout->op != NANOEV_TCP_TIMEOUT_READ) {
+        return;
+    }
+    timeout->op = NANOEV_TCP_TIMEOUT_NONE;
+
+    if (!(tcp->flags & NANOEV_TCP_FLAG_READING) || !tcp->on_read) {
+        return;
+    }
+
+    status = socket_timeout_error();
+    tcp->flags |= NANOEV_TCP_FLAG_ERROR;
+    tcp->error_code = status;
+
+    on_read = tcp->on_read;
+    tcp->on_read = NULL;
+
+#ifndef _WIN32
+    /*
+     * Reactor backends can unregister interest directly. IOCP still needs the
+     * late completion packet, so keep READING set there until it arrives.
+     */
+    tcp->flags &= ~NANOEV_TCP_FLAG_READING;
+#endif
+
+    if (tcp->sock != INVALID_SOCKET) {
+        close_tcp_socket(tcp);
+    }
+
+    if (!(tcp->flags & NANOEV_TCP_FLAG_DELETED)) {
+        on_read((nanoev_event*)tcp, status, tcp->buf_read.buf, 0);
     }
 }
 
@@ -829,6 +922,10 @@ static void tcp_timeout_write_callback(nanoev_timer_node *node)
     tcp->on_connect = NULL;
 
 #ifndef _WIN32
+    /*
+     * Reactor backends can unregister interest directly. IOCP still needs the
+     * late completion packet, so keep WRITING set there until it arrives.
+     */
     if (tcp->reactor_events & _EV_WRITE) {
         register_proactor(tcp->loop, (nanoev_proactor*)tcp, tcp->sock, tcp->reactor_events & ~_EV_WRITE);
     }
