@@ -711,7 +711,7 @@ int nanoev_udp_read(
  *   event    - UDP event.
  *   buf      - Data buffer.
  *   len      - Number of bytes to write.
- *   to_addr  - Destination address.
+ *   to_addr  - Destination address, or NULL for a connected UDP event.
  *   callback - Completion callback.
  *
  * Returns:
@@ -727,6 +727,27 @@ int nanoev_udp_write(
     unsigned int len, 
     const struct nanoev_addr *to_addr,
     nanoev_udp_on_write callback
+    );
+
+/*
+ * nanoev_udp_connect
+ *   Set the default peer address for a UDP event.
+ *
+ * Parameters:
+ *   event - UDP event.
+ *   addr  - Remote peer address.
+ *
+ * Returns:
+ *   NANOEV_SUCCESS on success, otherwise a NANOEV_ERROR_* code.
+ *
+ * Notes:
+ *   After connecting, nanoev_udp_write() may be called with to_addr set to
+ *   NULL. Connecting also filters incoming datagrams according to platform
+ *   socket semantics. No read or write operation may be pending.
+ */
+int nanoev_udp_connect(
+    nanoev_event *event,
+    const struct nanoev_addr *addr
     );
 
 /*

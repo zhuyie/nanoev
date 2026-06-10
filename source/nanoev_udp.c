@@ -15,6 +15,7 @@ struct nanoev_udp {
     struct sockaddr_storage from_addr;
 #ifndef _WIN32
     struct sockaddr_storage to_addr;
+    int write_connected;
 #endif
     /* callback functions */
     nanoev_udp_on_write on_write;
@@ -31,6 +32,7 @@ static int sockaddr_len(nanoev_udp *udp);
 #define NANOEV_UDP_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
 #define NANOEV_UDP_FLAG_ERROR        NANOEV_PROACTOR_FLAG_ERROR
 #define NANOEV_UDP_FLAG_DELETED      NANOEV_PROACTOR_FLAG_DELETED
+#define NANOEV_UDP_FLAG_CONNECTED    (0x00000001)
 
 /*----------------------------------------------------------------------------*/
 
@@ -143,7 +145,9 @@ int nanoev_udp_write(
     ASSERT(udp->type == nanoev_event_udp);
     ASSERT(in_loop_thread(udp->loop));
 
-    if (!buf || !len || !to_addr || !callback)
+    if (!buf || !len || !callback)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (!to_addr && !(udp->flags & NANOEV_UDP_FLAG_CONNECTED))
         return NANOEV_ERROR_INVALID_ARG;
     if (udp->flags & NANOEV_UDP_FLAG_ERROR
         || udp->flags & NANOEV_UDP_FLAG_DELETED
@@ -159,24 +163,40 @@ int nanoev_udp_write(
             return NANOEV_ERROR_FAIL;
         }
     }
+    if (to_addr && to_addr->ss_family != udp->family)
+        return NANOEV_ERROR_INVALID_ARG;
 
     udp->buf_write.buf = (char*)buf;
     udp->buf_write.len = len;
     memset(&udp->ctx_write, 0, sizeof(io_context));
 
 #ifdef _WIN32
-    if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
-        (struct sockaddr*)to_addr, sockaddr_len(udp), &udp->ctx_write, NULL)
-        && WSA_IO_PENDING != WSAGetLastError()
-        ) {
+    if (to_addr) {
+        if (0 != WSASendTo(udp->sock, &udp->buf_write, 1, NULL, 0,
+            (struct sockaddr*)to_addr, sockaddr_len(udp), &udp->ctx_write, NULL)
+            && WSA_IO_PENDING != WSAGetLastError()
+            ) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = WSAGetLastError();
+            return NANOEV_ERROR_FAIL;
+        }
+    } else if (0 != WSASend(udp->sock, &udp->buf_write, 1, NULL, 0, &udp->ctx_write, NULL)
+        && WSA_IO_PENDING != WSAGetLastError()) {
         udp->flags |= NANOEV_UDP_FLAG_ERROR;
         udp->error_code = WSAGetLastError();
         return NANOEV_ERROR_FAIL;
     }
 #else
-    memcpy(&(udp->to_addr), to_addr, sizeof(udp->to_addr));
-    int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
-        (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
+    int ret;
+    if (to_addr) {
+        udp->write_connected = 0;
+        memcpy(&(udp->to_addr), to_addr, sizeof(udp->to_addr));
+        ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0,
+            (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
+    } else {
+        udp->write_connected = 1;
+        ret = send(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0);
+    }
     if (ret > 0) {
         udp->ctx_write.status = 0;
         udp->ctx_write.bytes = ret;
@@ -202,6 +222,50 @@ int nanoev_udp_write(
 
     udp->flags |= NANOEV_UDP_FLAG_WRITING;
     udp->on_write = callback;
+
+    return NANOEV_SUCCESS;
+}
+
+int nanoev_udp_connect(
+    nanoev_event *event,
+    const struct nanoev_addr *addr
+    )
+{
+    nanoev_udp *udp = (nanoev_udp*)event;
+    int ret_code;
+
+    ASSERT(udp);
+    ASSERT(udp->type == nanoev_event_udp);
+    ASSERT(in_loop_thread(udp->loop));
+
+    if (!addr)
+        return NANOEV_ERROR_INVALID_ARG;
+    if (udp->flags & NANOEV_UDP_FLAG_ERROR
+        || udp->flags & NANOEV_UDP_FLAG_DELETED
+        || udp->flags & NANOEV_UDP_FLAG_READING
+        || udp->flags & NANOEV_UDP_FLAG_WRITING
+        )
+        return NANOEV_ERROR_ACCESS_DENIED;
+
+    if (udp->sock == INVALID_SOCKET) {
+        ret_code = create_udp_socket(udp, addr->ss_family);
+        if (ret_code != 0) {
+            udp->flags |= NANOEV_UDP_FLAG_ERROR;
+            udp->error_code = ret_code;
+            return NANOEV_ERROR_FAIL;
+        }
+    } else if (addr->ss_family != udp->family) {
+        return NANOEV_ERROR_INVALID_ARG;
+    }
+
+    ret_code = connect(udp->sock, (const struct sockaddr*)addr, sockaddr_len(udp));
+    if (0 != ret_code) {
+        udp->flags |= NANOEV_UDP_FLAG_ERROR;
+        udp->error_code = socket_last_error();
+        return NANOEV_ERROR_FAIL;
+    }
+
+    udp->flags |= NANOEV_UDP_FLAG_CONNECTED;
 
     return NANOEV_SUCCESS;
 }
@@ -419,8 +483,13 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
 
     } else {
         ASSERT(events == _EV_WRITE);
-        int ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0, 
-            (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
+        int ret;
+        if (udp->write_connected) {
+            ret = send(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0);
+        } else {
+            ret = sendto(udp->sock, udp->buf_write.buf, udp->buf_write.len, 0,
+                (struct sockaddr*)&udp->to_addr, sockaddr_len(udp));
+        }
         if (ret > 0) {
             udp->ctx_write.status = 0;
             udp->ctx_write.bytes = ret;

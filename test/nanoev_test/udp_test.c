@@ -107,13 +107,19 @@ static void test_udp_loopback_round_trip(nanoev_test *test)
     }
     TEST_EXPECT(test, nanoev_addr_get_port(&addr, &port) == NANOEV_SUCCESS);
     TEST_EXPECT(test, port != 0);
+    TEST_EXPECT(test, nanoev_udp_write(tc.udp, request, 4, NULL, on_udp_write) == NANOEV_ERROR_INVALID_ARG);
+    ret = nanoev_udp_connect(tc.udp, &addr);
+    TEST_EXPECT(test, ret == NANOEV_SUCCESS);
+    if (ret != NANOEV_SUCCESS) {
+        goto cleanup;
+    }
 
     ret = nanoev_udp_read(tc.udp, tc.read_buf, sizeof(tc.read_buf), on_udp_read);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {
         goto cleanup;
     }
-    ret = nanoev_udp_write(tc.udp, request, 4, &addr, on_udp_write);
+    ret = nanoev_udp_write(tc.udp, request, 4, NULL, on_udp_write);
     TEST_EXPECT(test, ret == NANOEV_SUCCESS);
     if (ret != NANOEV_SUCCESS) {
         goto cleanup;
