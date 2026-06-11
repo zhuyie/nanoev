@@ -12,6 +12,7 @@ typedef struct _epoll_poller {
     int epd;
     int notifyfd;
     poller_event *events;
+    int events_start;
     int events_count;
     int events_capacity;
 } _epoll_poller;
@@ -45,6 +46,7 @@ poller epoll_poller_create(void)
     }
 
     p->events = NULL;
+    p->events_start = 0;
     p->events_count = 0;
     p->events_capacity = 0;
 
@@ -114,10 +116,12 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
         if (count0 > max_events)
             count0 = max_events;
 
-        memcpy(events, _p->events, sizeof(poller_event)*count0);
+        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count0);
         _p->events_count -= count0;
         if (_p->events_count > 0) {
-            memcpy(_p->events, _p->events+count0, sizeof(poller_event)*_p->events_count);
+            _p->events_start += count0;
+        } else {
+            _p->events_start = 0;
         }
 
         events += count0;
@@ -127,7 +131,7 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
         } 
     }
 
-    struct epoll_event _events[64];
+    struct epoll_event _events[256];
     count1 = sizeof(_events) / sizeof(_events[0]);
     if (count1 > max_events)
         count1 = max_events;
@@ -188,6 +192,13 @@ int epoll_poller_submit(poller p, const poller_event *event)
     _epoll_poller *_p = (_epoll_poller*)p;
     ASSERT(_p->epd >= 0);
 
+    if (_p->events_start + _p->events_count == _p->events_capacity) {
+        if (_p->events_start > 0) {
+            memmove(_p->events, _p->events + _p->events_start, sizeof(poller_event)*_p->events_count);
+            _p->events_start = 0;
+        }
+    }
+
     if (_p->events_count == _p->events_capacity) {
         void *new_events = mem_realloc(_p->events, sizeof(poller_event)*(_p->events_capacity + 128));
         if (!new_events) {
@@ -199,7 +210,7 @@ int epoll_poller_submit(poller p, const poller_event *event)
 
     ASSERT(_p->events);
     ASSERT(_p->events_count < _p->events_capacity);
-    memcpy(_p->events + _p->events_count, event, sizeof(poller_event));
+    memcpy(_p->events + _p->events_start + _p->events_count, event, sizeof(poller_event));
     _p->events_count += 1;
 
     return 0;

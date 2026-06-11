@@ -13,6 +13,7 @@
 typedef struct _kqueue_poller {
     int kq;
     poller_event *events;
+    int events_start;
     int events_count;
     int events_capacity;
 } _kqueue_poller;
@@ -40,6 +41,7 @@ poller kqueue_poller_create(void)
     }
 
     p->events = NULL;
+    p->events_start = 0;
     p->events_count = 0;
     p->events_capacity = 0;
 
@@ -58,7 +60,8 @@ void kqueue_poller_destroy(poller p)
 
 int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int events)
 {
-    struct kevent changes[1];
+    struct kevent changes[2];
+    int changes_count = 0;
     _kqueue_poller *_p = (_kqueue_poller*)p;
     ASSERT(_p->kq >= 0);
 
@@ -68,36 +71,25 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
         return 0;
     }
 
-    changes[0].flags = 0;
     if ((events & _EV_READ) && !(reactor_events & _EV_READ)) {
-        EV_SET(&changes[0], fd, EVFILT_READ, EV_ADD, 0, 0, proactor);
+        EV_SET(&changes[changes_count++], fd, EVFILT_READ, EV_ADD, 0, 0, proactor);
         reactor_events |= _EV_READ;
     } else if (!(events & _EV_READ) && (reactor_events & _EV_READ)) {
-        EV_SET(&changes[0], fd, EVFILT_READ, EV_DELETE, 0, 0, proactor);
+        EV_SET(&changes[changes_count++], fd, EVFILT_READ, EV_DELETE, 0, 0, proactor);
         reactor_events &= ~_EV_READ;
     }
-    if (changes[0].flags) {
-        int ret = kevent(_p->kq, changes, 1, NULL, 0, NULL);
-        if (ret != 0) {
-            printf("kqueue_poller_modify kevent(r) ret=%d,errno=%d\n", ret, errno);
-            return -1;
-        }
-        proactor->reactor_events = reactor_events;
-    }
 
-
-    changes[0].flags = 0;
     if ((events & _EV_WRITE) && !(reactor_events & _EV_WRITE)) {
-        EV_SET(&changes[0], fd, EVFILT_WRITE, EV_ADD, 0, 0, proactor);
+        EV_SET(&changes[changes_count++], fd, EVFILT_WRITE, EV_ADD, 0, 0, proactor);
         reactor_events |= _EV_WRITE;
     } else if (!(events & _EV_WRITE) && (reactor_events & _EV_WRITE)) {
-        EV_SET(&changes[0], fd, EVFILT_WRITE, EV_DELETE, 0, 0, proactor);
+        EV_SET(&changes[changes_count++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, proactor);
         reactor_events &= ~_EV_WRITE;
     }
-    if (changes[0].flags) {
-        int ret = kevent(_p->kq, changes, 1, NULL, 0, NULL);
+    if (changes_count > 0) {
+        int ret = kevent(_p->kq, changes, changes_count, NULL, 0, NULL);
         if (ret != 0) {
-            printf("kqueue_poller_modify kevent(w) ret=%d,errno=%d\n", ret, errno);
+            printf("kqueue_poller_modify kevent ret=%d,errno=%d\n", ret, errno);
             return -1;
         }
         proactor->reactor_events = reactor_events;
@@ -118,10 +110,12 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         if (count0 > max_events)
             count0 = max_events;
 
-        memcpy(events, _p->events, sizeof(poller_event)*count0);
+        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count0);
         _p->events_count -= count0;
         if (_p->events_count > 0) {
-            memcpy(_p->events, _p->events+count0, sizeof(poller_event)*_p->events_count);
+            _p->events_start += count0;
+        } else {
+            _p->events_start = 0;
         }
 
         events += count0;
@@ -131,7 +125,7 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         } 
     }
 
-    struct kevent _events[64];
+    struct kevent _events[256];
     count1 = sizeof(_events) / sizeof(_events[0]);
     if (count1 > max_events)
         count1 = max_events;
@@ -195,6 +189,13 @@ int kqueue_poller_submit(poller p, const poller_event *event)
     _kqueue_poller *_p = (_kqueue_poller*)p;
     ASSERT(_p->kq >= 0);
 
+    if (_p->events_start + _p->events_count == _p->events_capacity) {
+        if (_p->events_start > 0) {
+            memmove(_p->events, _p->events + _p->events_start, sizeof(poller_event)*_p->events_count);
+            _p->events_start = 0;
+        }
+    }
+
     if (_p->events_count == _p->events_capacity) {
         void *new_events = mem_realloc(_p->events, sizeof(poller_event)*(_p->events_capacity + 128));
         if (!new_events) {
@@ -206,7 +207,7 @@ int kqueue_poller_submit(poller p, const poller_event *event)
 
     ASSERT(_p->events);
     ASSERT(_p->events_count < _p->events_capacity);
-    memcpy(_p->events + _p->events_count, event, sizeof(poller_event));
+    memcpy(_p->events + _p->events_start + _p->events_count, event, sizeof(poller_event));
     _p->events_count += 1;
 
     return 0;

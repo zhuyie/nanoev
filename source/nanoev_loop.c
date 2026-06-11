@@ -68,7 +68,7 @@ void nanoev_loop_free(nanoev_loop *loop)
 
 int nanoev_loop_run(nanoev_loop *loop)
 {
-    poller_event events[128];
+    poller_event events[256];
     int count, i;
     nanoev_timeval timeout;
     int ret_code = NANOEV_SUCCESS;

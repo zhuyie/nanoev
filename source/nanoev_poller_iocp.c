@@ -54,7 +54,7 @@ int iocp_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int event
 
 int iocp_poller_poll(poller p, poller_event *events, int max_events, const nanoev_timeval *timeout)
 {
-    OVERLAPPED_ENTRY overlappeds[128];
+    OVERLAPPED_ENTRY overlappeds[256];
     BOOL success;
     DWORD i, count, count1;
     unsigned int timeout_in_ms;
