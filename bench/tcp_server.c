@@ -131,7 +131,7 @@ int bench_tcp_server_run(const bench_config *config)
     printf("tcp server listening on %s:%u message_size=%u backlog=%u\n",
         config->host, (unsigned int)config->port, config->message_size, config->backlog);
     printf("press Ctrl+C to stop\n");
-    bench_stats_print_delta_header("server");
+    bench_stats_print_delta_header("server", 1);
 
     ret = nanoev_loop_run(server.loop);
     if (ret != NANOEV_SUCCESS)
@@ -140,7 +140,7 @@ int bench_tcp_server_run(const bench_config *config)
     {
         nanoev_timeval ended;
         nanoev_now(&ended);
-        bench_stats_print_total("server", &server.stats, bench_time_diff_ms(&server.started, &ended));
+        bench_stats_print_total("server", &server.stats, bench_time_diff_ms(&server.started, &ended), 1);
     }
 
     server.shutting_down = 1;
@@ -215,7 +215,7 @@ static void on_accept(nanoev_event *tcp, int status, nanoev_event *tcp_new)
     tcp_server_conn *conn;
 
     if (status || !tcp_new) {
-        bench_stats_record_error(&server->stats);
+        bench_stats_record_accept_error(&server->stats);
         if (server_accept_next(server, tcp) != 0)
             nanoev_loop_break(server->loop);
         return;
@@ -238,7 +238,7 @@ static int server_accept_next(tcp_server *server, nanoev_event *tcp)
 {
     if (nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata) == NANOEV_SUCCESS)
         return 0;
-    bench_stats_record_error(&server->stats);
+    bench_stats_record_accept_error(&server->stats);
     return -1;
 }
 
@@ -360,7 +360,7 @@ static void on_report(nanoev_event *timer)
     uint64_t now = bench_time_us();
     uint64_t elapsed_ms = (now - server->previous_us) / 1000ULL;
 
-    bench_stats_print_delta("server", &server->stats, &server->previous, elapsed_ms);
+    bench_stats_print_delta("server", &server->stats, &server->previous, elapsed_ms, 1);
     server->previous = server->stats;
     server->previous_us = now;
 }

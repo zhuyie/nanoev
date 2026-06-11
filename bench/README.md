@@ -38,6 +38,8 @@ Useful options:
 The client reports total request throughput, transferred MiB, error count, and
 approximate latency percentiles. The percentile values come from a power-of-two
 microsecond histogram, so they are bucketed estimates rather than exact samples.
+The server reports the same request counters and splits errors into accept-layer
+and established-connection I/O errors.
 
 Example client output:
 

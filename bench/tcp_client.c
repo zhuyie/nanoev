@@ -152,13 +152,13 @@ int bench_tcp_client_run(const bench_config *config)
     client.deadline_us = client.previous_us + ((uint64_t)config->duration * 1000000ULL);
     printf("tcp client connecting to %s:%u connections=%u duration=%us message_size=%u\n",
         config->host, (unsigned int)config->port, config->connections, config->duration, config->message_size);
-    bench_stats_print_delta_header("client");
+    bench_stats_print_delta_header("client", 0);
 
     ret = nanoev_loop_run(client.loop);
     if (ret != NANOEV_SUCCESS)
         goto fail;
 
-    bench_stats_print_total("client", &client.stats, (uint64_t)config->duration * 1000ULL);
+    bench_stats_print_total("client", &client.stats, (uint64_t)config->duration * 1000ULL, 0);
 
     for (i = 0; i < config->connections; i++)
         conn_close(&client.connections[i]);
@@ -368,7 +368,7 @@ static void on_report(nanoev_event *timer)
     uint64_t now = bench_time_us();
     uint64_t elapsed_ms = (now - client->previous_us) / 1000ULL;
 
-    bench_stats_print_delta("client", &client->stats, &client->previous, elapsed_ms);
+    bench_stats_print_delta("client", &client->stats, &client->previous, elapsed_ms, 0);
     client->previous = client->stats;
     client->previous_us = now;
 }

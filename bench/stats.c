@@ -110,7 +110,19 @@ void bench_stats_record_request(bench_stats *stats, uint64_t bytes)
 
 void bench_stats_record_error(bench_stats *stats)
 {
+    bench_stats_record_io_error(stats);
+}
+
+void bench_stats_record_accept_error(bench_stats *stats)
+{
     stats->errors++;
+    stats->accept_errors++;
+}
+
+void bench_stats_record_io_error(bench_stats *stats)
+{
+    stats->errors++;
+    stats->io_errors++;
 }
 
 void bench_stats_record_latency(bench_stats *stats, uint64_t latency_us)
@@ -126,14 +138,17 @@ void bench_stats_record_latency(bench_stats *stats, uint64_t latency_us)
     stats->latency_buckets[bucket]++;
 }
 
-void bench_stats_print_delta_header(const char *prefix)
+void bench_stats_print_delta_header(const char *prefix, int show_error_breakdown)
 {
+    (void)show_error_breakdown;
+
     printf("\n[%s] interval stats\n", prefix);
     printf("  %-8s %12s %10s %12s %14s %10s\n",
         "time", "req/s", "MiB", "requests", "total", "errors");
 }
 
-void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const bench_stats *previous, uint64_t elapsed_ms)
+void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const bench_stats *previous,
+    uint64_t elapsed_ms, int show_error_breakdown)
 {
     uint64_t requests = stats->requests - previous->requests;
     uint64_t bytes = stats->bytes - previous->bytes;
@@ -146,6 +161,8 @@ void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const
     char total_buf[FORMAT_BUFFER_SIZE];
     char errors_buf[FORMAT_BUFFER_SIZE];
 
+    (void)show_error_breakdown;
+
     format_clock_time(time_buf, sizeof(time_buf));
     format_rate((double)requests / seconds, rate_buf, sizeof(rate_buf));
     format_mib((double)bytes / (1024.0 * 1024.0), mib_buf, sizeof(mib_buf));
@@ -157,7 +174,8 @@ void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const
         time_buf, rate_buf, mib_buf, requests_buf, total_buf, errors_buf);
 }
 
-void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint64_t elapsed_ms)
+void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint64_t elapsed_ms,
+    int show_error_breakdown)
 {
     double seconds = elapsed_ms ? (double)elapsed_ms / 1000.0 : 1.0;
     uint64_t avg = stats->latency_count ? stats->latency_sum_us / stats->latency_count : 0;
@@ -165,6 +183,8 @@ void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint6
     char duration_buf[FORMAT_BUFFER_SIZE];
     char requests_buf[FORMAT_BUFFER_SIZE];
     char errors_buf[FORMAT_BUFFER_SIZE];
+    char accept_errors_buf[FORMAT_BUFFER_SIZE];
+    char io_errors_buf[FORMAT_BUFFER_SIZE];
     char rate_buf[FORMAT_BUFFER_SIZE];
     char mib_buf[FORMAT_BUFFER_SIZE];
     char mib_rate_buf[FORMAT_BUFFER_SIZE];
@@ -176,6 +196,8 @@ void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint6
     }
     format_count(stats->requests, requests_buf, sizeof(requests_buf));
     format_count(stats->errors, errors_buf, sizeof(errors_buf));
+    format_count(stats->accept_errors, accept_errors_buf, sizeof(accept_errors_buf));
+    format_count(stats->io_errors, io_errors_buf, sizeof(io_errors_buf));
     format_rate((double)stats->requests / seconds, rate_buf, sizeof(rate_buf));
     format_mib((double)stats->bytes / (1024.0 * 1024.0), mib_buf, sizeof(mib_buf));
     format_mib((double)stats->bytes / (1024.0 * 1024.0) / seconds, mib_rate_buf, sizeof(mib_rate_buf));
@@ -184,7 +206,11 @@ void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint6
     printf("  duration : %s\n", duration_buf);
     printf("  requests : %s (%s)\n", requests_buf, rate_buf);
     printf("  transfer : %s MiB (%s MiB/s)\n", mib_buf, mib_rate_buf);
-    printf("  errors   : %s\n", errors_buf);
+    if (show_error_breakdown) {
+        printf("  errors   : %s (accept=%s io=%s)\n", errors_buf, accept_errors_buf, io_errors_buf);
+    } else {
+        printf("  errors   : %s\n", errors_buf);
+    }
 
     if (stats->latency_count) {
         printf("  latency  : min=%lluus avg=%lluus p50=%lluus p95=%lluus p99=%lluus max=%lluus\n",
