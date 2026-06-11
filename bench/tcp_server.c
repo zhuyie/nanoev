@@ -97,34 +97,55 @@ int bench_tcp_server_run(const bench_config *config)
     bench_stats_init(&server.previous);
 
     ret = nanoev_init();
-    if (ret != NANOEV_SUCCESS)
+    if (ret != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: nanoev_init returned %d\n", ret);
         return 1;
+    }
 
     server.loop = nanoev_loop_new(NULL);
-    if (!server.loop)
+    if (!server.loop) {
+        fprintf(stderr, "server setup failed: unable to create loop\n");
         goto fail;
+    }
 
     server.listener = nanoev_event_new(nanoev_event_tcp, server.loop, &server);
     server.async = nanoev_event_new(nanoev_event_async, server.loop, NULL);
     server.report_timer = nanoev_event_new(nanoev_event_timer, server.loop, &server);
-    if (!server.listener || !server.async || !server.report_timer)
+    if (!server.listener || !server.async || !server.report_timer) {
+        fprintf(stderr, "server setup failed: unable to create control events\n");
         goto fail;
+    }
 
-    if (nanoev_addr_init(&addr, config->family, config->host, config->port) != NANOEV_SUCCESS)
+    if (nanoev_addr_init(&addr, config->family, config->host, config->port) != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: invalid address %s:%u\n",
+            config->host, (unsigned int)config->port);
         goto fail;
-    if (nanoev_tcp_listen(server.listener, &addr, (int)config->backlog) != NANOEV_SUCCESS)
+    }
+    if (nanoev_tcp_listen(server.listener, &addr, (int)config->backlog) != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: listen failed on %s:%u, socket_error=%d\n",
+            config->host, (unsigned int)config->port, nanoev_tcp_error(server.listener));
         goto fail;
-    if (nanoev_tcp_accept(server.listener, NULL, on_accept, alloc_userdata) != NANOEV_SUCCESS)
+    }
+    if (nanoev_tcp_accept(server.listener, NULL, on_accept, alloc_userdata) != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: accept start failed, socket_error=%d\n",
+            nanoev_tcp_error(server.listener));
         goto fail;
-    if (nanoev_async_start(server.async, on_signal_async) != NANOEV_SUCCESS)
+    }
+    if (nanoev_async_start(server.async, on_signal_async) != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: unable to start signal async\n");
         goto fail;
-    if (install_signal_handler(server.async))
+    }
+    if (install_signal_handler(server.async)) {
+        fprintf(stderr, "server setup failed: unable to install signal handler\n");
         goto fail;
+    }
 
     interval.tv_sec = config->report_interval;
     interval.tv_usec = 0;
-    if (nanoev_timer_add(server.report_timer, interval, 1, on_report) != NANOEV_SUCCESS)
+    if (nanoev_timer_add(server.report_timer, interval, 1, on_report) != NANOEV_SUCCESS) {
+        fprintf(stderr, "server setup failed: unable to start report timer\n");
         goto fail;
+    }
 
     nanoev_now(&server.started);
     server.previous_us = bench_time_us();
@@ -134,8 +155,10 @@ int bench_tcp_server_run(const bench_config *config)
     bench_stats_print_delta_header("server", 1);
 
     ret = nanoev_loop_run(server.loop);
-    if (ret != NANOEV_SUCCESS)
+    if (ret != NANOEV_SUCCESS) {
+        fprintf(stderr, "server failed: loop returned %d\n", ret);
         goto fail;
+    }
 
     {
         nanoev_timeval ended;
@@ -248,6 +271,7 @@ static int server_accept_next(tcp_server *server, nanoev_event *tcp)
     if (nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata) == NANOEV_SUCCESS)
         return 0;
     bench_stats_record_accept_error(&server->stats);
+    fprintf(stderr, "server accept failed: accept start failed, socket_error=%d\n", nanoev_tcp_error(tcp));
     return -1;
 }
 

@@ -99,28 +99,43 @@ int bench_tcp_client_run(const bench_config *config)
     bench_stats_init(&client.previous);
 
     ret = nanoev_init();
-    if (ret != NANOEV_SUCCESS)
+    if (ret != NANOEV_SUCCESS) {
+        fprintf(stderr, "client setup failed: nanoev_init returned %d\n", ret);
         return 1;
+    }
 
     client.loop = nanoev_loop_new(NULL);
-    if (!client.loop)
+    if (!client.loop) {
+        fprintf(stderr, "client setup failed: unable to create loop\n");
         goto fail;
+    }
 
     client.async = nanoev_event_new(nanoev_event_async, client.loop, NULL);
     client.stop_timer = nanoev_event_new(nanoev_event_timer, client.loop, &client);
     client.report_timer = nanoev_event_new(nanoev_event_timer, client.loop, &client);
-    if (!client.async || !client.stop_timer || !client.report_timer)
+    if (!client.async || !client.stop_timer || !client.report_timer) {
+        fprintf(stderr, "client setup failed: unable to create control events\n");
         goto fail;
-    if (nanoev_async_start(client.async, on_signal_async) != NANOEV_SUCCESS)
+    }
+    if (nanoev_async_start(client.async, on_signal_async) != NANOEV_SUCCESS) {
+        fprintf(stderr, "client setup failed: unable to start signal async\n");
         goto fail;
-    if (install_signal_handler(client.async))
+    }
+    if (install_signal_handler(client.async)) {
+        fprintf(stderr, "client setup failed: unable to install signal handler\n");
         goto fail;
+    }
 
     client.connections = (tcp_client_conn*)calloc(config->connections, sizeof(*client.connections));
-    if (!client.connections)
+    if (!client.connections) {
+        fprintf(stderr, "client setup failed: unable to allocate %u connections\n", config->connections);
         goto fail;
-    if (nanoev_addr_init(&addr, config->family, config->host, config->port) != NANOEV_SUCCESS)
+    }
+    if (nanoev_addr_init(&addr, config->family, config->host, config->port) != NANOEV_SUCCESS) {
+        fprintf(stderr, "client setup failed: invalid address %s:%u\n",
+            config->host, (unsigned int)config->port);
         goto fail;
+    }
 
     for (i = 0; i < config->connections; i++) {
         tcp_client_conn *conn = &client.connections[i];
@@ -128,13 +143,20 @@ int bench_tcp_client_run(const bench_config *config)
         conn->client = &client;
         conn->frame_size = BENCH_FRAME_HEADER_SIZE + config->message_size;
         conn->buf = (unsigned char*)malloc(conn->frame_size);
-        if (!conn->buf)
+        if (!conn->buf) {
+            fprintf(stderr, "client setup failed: unable to allocate connection %u buffer\n", i);
             goto fail;
+        }
         conn->tcp = nanoev_event_new(nanoev_event_tcp, client.loop, conn);
-        if (!conn->tcp)
+        if (!conn->tcp) {
+            fprintf(stderr, "client setup failed: unable to allocate TCP event for connection %u\n", i);
             goto fail;
-        if (nanoev_tcp_connect(conn->tcp, &addr, NULL, on_connect) != NANOEV_SUCCESS)
+        }
+        if (nanoev_tcp_connect(conn->tcp, &addr, NULL, on_connect) != NANOEV_SUCCESS) {
+            fprintf(stderr, "client setup failed: connect start failed for connection %u, socket_error=%d\n",
+                i, nanoev_tcp_error(conn->tcp));
             goto fail;
+        }
         client.active_connections++;
     }
 
@@ -142,10 +164,14 @@ int bench_tcp_client_run(const bench_config *config)
     interval.tv_usec = 0;
     duration.tv_sec = config->duration + 1;
     duration.tv_usec = 0;
-    if (nanoev_timer_add(client.report_timer, interval, 1, on_report) != NANOEV_SUCCESS)
+    if (nanoev_timer_add(client.report_timer, interval, 1, on_report) != NANOEV_SUCCESS) {
+        fprintf(stderr, "client setup failed: unable to start report timer\n");
         goto fail;
-    if (nanoev_timer_add(client.stop_timer, duration, 0, on_stop) != NANOEV_SUCCESS)
+    }
+    if (nanoev_timer_add(client.stop_timer, duration, 0, on_stop) != NANOEV_SUCCESS) {
+        fprintf(stderr, "client setup failed: unable to start stop timer\n");
         goto fail;
+    }
 
     nanoev_now(&client.started);
     client.previous_us = bench_time_us();

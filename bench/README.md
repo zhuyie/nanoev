@@ -35,6 +35,10 @@ Useful options:
   for now because nanoev currently allows one pending read and one pending write
   per event.
 
+High connection counts require enough file descriptors for both the client and
+server processes. On systems with a low default limit, check `ulimit -n` and
+raise it before running large connection counts.
+
 The client reports total request throughput, transferred MiB, error count, and
 approximate latency percentiles. The percentile values come from a power-of-two
 microsecond histogram, so they are bucketed estimates rather than exact samples.
