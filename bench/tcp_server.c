@@ -188,7 +188,10 @@ static void* alloc_userdata(void *context, void *userdata)
     tcp_server_conn *conn;
 
     if (userdata) {
-        free(userdata);
+        conn = (tcp_server_conn*)userdata;
+        conn_unlink(conn);
+        free(conn->buf);
+        free(conn);
         return NULL;
     }
 
