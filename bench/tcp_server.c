@@ -56,6 +56,7 @@ static nanoev_event *signal_async;
 static void on_signal_async(nanoev_event *async);
 static int install_signal_handler(nanoev_event *async);
 static void on_accept(nanoev_event *tcp, int status, nanoev_event *tcp_new);
+static int server_accept_next(tcp_server *server, nanoev_event *tcp);
 static void* alloc_userdata(void *context, void *userdata);
 static void conn_close(tcp_server_conn *conn);
 static void conn_unlink(tcp_server_conn *conn);
@@ -215,6 +216,8 @@ static void on_accept(nanoev_event *tcp, int status, nanoev_event *tcp_new)
 
     if (status || !tcp_new) {
         bench_stats_record_error(&server->stats);
+        if (server_accept_next(server, tcp) != 0)
+            nanoev_loop_break(server->loop);
         return;
     }
 
@@ -227,10 +230,16 @@ static void on_accept(nanoev_event *tcp, int status, nanoev_event *tcp_new)
         conn_close(conn);
     }
 
-    if (nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata) != NANOEV_SUCCESS) {
-        bench_stats_record_error(&server->stats);
+    if (server_accept_next(server, tcp) != 0)
         nanoev_loop_break(server->loop);
-    }
+}
+
+static int server_accept_next(tcp_server *server, nanoev_event *tcp)
+{
+    if (nanoev_tcp_accept(tcp, NULL, on_accept, alloc_userdata) == NANOEV_SUCCESS)
+        return 0;
+    bench_stats_record_error(&server->stats);
+    return -1;
 }
 
 static void conn_unlink(tcp_server_conn *conn)
