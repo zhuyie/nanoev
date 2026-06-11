@@ -132,7 +132,33 @@ if(NANOEV_BUILD_BENCHMARKS)
         bench/main.c
         bench/tcp_server.c
         bench/tcp_client.c
+        bench/clock.c
+        bench/net.c
         bench/stats.c
     )
     target_link_libraries(nanoev_bench PRIVATE nanoev)
+
+    find_path(LIBEVENT_INCLUDE_DIR event2/event.h
+        PATHS /opt/homebrew/opt/libevent/include /usr/local/include /usr/include)
+    find_library(LIBEVENT_LIBRARY event
+        PATHS /opt/homebrew/opt/libevent/lib /usr/local/lib /usr/lib)
+    if(LIBEVENT_INCLUDE_DIR AND LIBEVENT_LIBRARY)
+        message(STATUS "Found libevent: building libevent_bench")
+        add_executable(libevent_bench
+            bench/main.c
+            bench/libevent_tcp_server.c
+            bench/libevent_tcp_client.c
+            bench/clock.c
+            bench/net.c
+            bench/stats.c
+        )
+        target_include_directories(libevent_bench PRIVATE ${LIBEVENT_INCLUDE_DIR})
+        target_compile_definitions(libevent_bench PRIVATE
+            BENCH_TCP_SERVER_RUN=bench_libevent_tcp_server_run
+            BENCH_TCP_CLIENT_RUN=bench_libevent_tcp_client_run
+        )
+        target_link_libraries(libevent_bench PRIVATE ${LIBEVENT_LIBRARY})
+    else()
+        message(STATUS "libevent not found: skipping libevent_bench")
+    endif()
 endif()

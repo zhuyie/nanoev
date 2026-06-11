@@ -1,7 +1,6 @@
 #ifndef NANOEV_BENCH_STATS_H
 #define NANOEV_BENCH_STATS_H
 
-#include "nanoev.h"
 #include <stdint.h>
 
 #define BENCH_LATENCY_BUCKETS 32
@@ -30,7 +29,4 @@ void bench_stats_print_delta(const char *prefix, const bench_stats *stats, const
     uint64_t elapsed_ms, int show_error_breakdown);
 void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint64_t elapsed_ms,
     int show_error_breakdown);
-uint64_t bench_time_us(void);
-uint64_t bench_time_diff_ms(const nanoev_timeval *start, const nanoev_timeval *end);
-
 #endif

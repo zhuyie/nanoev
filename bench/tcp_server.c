@@ -1,4 +1,5 @@
 #include "tcp.h"
+#include "clock.h"
 #include "protocol.h"
 #include "stats.h"
 #include "nanoev.h"
@@ -46,7 +47,7 @@ struct tcp_server {
     tcp_server_conn *head;
     bench_stats stats;
     bench_stats previous;
-    nanoev_timeval started;
+    bench_timeval started;
     uint64_t previous_us;
 };
 
@@ -84,7 +85,7 @@ static void sigint_handler(int sig)
 }
 #endif
 
-int bench_tcp_server_run(const bench_config *config)
+int bench_nanoev_tcp_server_run(const bench_config *config)
 {
     tcp_server server;
     struct nanoev_addr addr;
@@ -116,7 +117,8 @@ int bench_tcp_server_run(const bench_config *config)
         goto fail;
     }
 
-    if (nanoev_addr_init(&addr, config->family, config->host, config->port) != NANOEV_SUCCESS) {
+    if (nanoev_addr_init(&addr, config->family == bench_family_ipv6 ? NANOEV_AF_INET6 : NANOEV_AF_INET,
+        config->host, config->port) != NANOEV_SUCCESS) {
         fprintf(stderr, "server setup failed: invalid address %s:%u\n",
             config->host, (unsigned int)config->port);
         goto fail;
@@ -147,7 +149,7 @@ int bench_tcp_server_run(const bench_config *config)
         goto fail;
     }
 
-    nanoev_now(&server.started);
+    bench_now(&server.started);
     server.previous_us = bench_time_us();
     printf("tcp server listening on %s:%u message_size=%u backlog=%u\n",
         config->host, (unsigned int)config->port, config->message_size, config->backlog);
@@ -161,8 +163,8 @@ int bench_tcp_server_run(const bench_config *config)
     }
 
     {
-        nanoev_timeval ended;
-        nanoev_now(&ended);
+        bench_timeval ended;
+        bench_now(&ended);
         bench_stats_print_total("server", &server.stats, bench_time_diff_ms(&server.started, &ended), 1);
     }
 

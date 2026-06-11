@@ -222,19 +222,3 @@ void bench_stats_print_total(const char *prefix, const bench_stats *stats, uint6
             (unsigned long long)stats->latency_max_us);
     }
 }
-
-uint64_t bench_time_us(void)
-{
-    nanoev_timeval now;
-
-    nanoev_now(&now);
-    return ((uint64_t)now.tv_sec * 1000000ULL) + (uint64_t)now.tv_usec;
-}
-
-uint64_t bench_time_diff_ms(const nanoev_timeval *start, const nanoev_timeval *end)
-{
-    uint64_t start_ms = ((uint64_t)start->tv_sec * 1000ULL) + ((uint64_t)start->tv_usec / 1000ULL);
-    uint64_t end_ms = ((uint64_t)end->tv_sec * 1000ULL) + ((uint64_t)end->tv_usec / 1000ULL);
-
-    return end_ms - start_ms;
-}

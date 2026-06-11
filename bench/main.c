@@ -1,8 +1,15 @@
 #include "tcp.h"
-#include "nanoev.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef BENCH_TCP_SERVER_RUN
+# define BENCH_TCP_SERVER_RUN bench_nanoev_tcp_server_run
+#endif
+
+#ifndef BENCH_TCP_CLIENT_RUN
+# define BENCH_TCP_CLIENT_RUN bench_nanoev_tcp_client_run
+#endif
 
 static void usage(const char *program)
 {
@@ -57,7 +64,7 @@ int main(int argc, char **argv)
     config.role = bench_role_client;
     config.host = "127.0.0.1";
     config.port = 4000;
-    config.family = NANOEV_AF_INET;
+    config.family = bench_family_ipv4;
     config.duration = 10;
     config.connections = 1;
     config.message_size = 64;
@@ -95,7 +102,7 @@ int main(int argc, char **argv)
                 goto invalid_arg;
             config.port = (unsigned short)port;
         } else if (strcmp(argv[i], "--ipv6") == 0) {
-            config.family = NANOEV_AF_INET6;
+            config.family = bench_family_ipv6;
             config.host = "::1";
         } else if (strcmp(argv[i], "--duration") == 0) {
             if (next_arg(argc, argv, &i, &value) || parse_uint(value, &config.duration))
@@ -139,9 +146,9 @@ int main(int argc, char **argv)
     }
 
     if (config.role == bench_role_server)
-        ret = bench_tcp_server_run(&config);
+        ret = BENCH_TCP_SERVER_RUN(&config);
     else
-        ret = bench_tcp_client_run(&config);
+        ret = BENCH_TCP_CLIENT_RUN(&config);
     if (ret != 0)
         fprintf(stderr, "benchmark failed\n");
     return ret;

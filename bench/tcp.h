@@ -6,11 +6,16 @@ typedef enum bench_role {
     bench_role_client
 } bench_role;
 
+typedef enum bench_family {
+    bench_family_ipv4 = 0,
+    bench_family_ipv6
+} bench_family;
+
 typedef struct bench_config {
     bench_role role;
     const char *host;
     unsigned short port;
-    int family;
+    bench_family family;
     unsigned int duration;
     unsigned int connections;
     unsigned int message_size;
@@ -19,7 +24,9 @@ typedef struct bench_config {
     unsigned int report_interval;
 } bench_config;
 
-int bench_tcp_server_run(const bench_config *config);
-int bench_tcp_client_run(const bench_config *config);
+int bench_nanoev_tcp_server_run(const bench_config *config);
+int bench_nanoev_tcp_client_run(const bench_config *config);
+int bench_libevent_tcp_server_run(const bench_config *config);
+int bench_libevent_tcp_client_run(const bench_config *config);
 
 #endif
