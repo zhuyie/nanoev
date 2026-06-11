@@ -4,6 +4,8 @@
 TCP connections. The command line reserves a protocol selector so UDP can be
 added later, but the first implementation supports TCP only.
 
+See [PERFORMANCE.md](PERFORMANCE.md) for a local nanoev/libevent comparison run.
+
 Build with benchmarks enabled:
 
 ```sh
@@ -14,13 +16,27 @@ cmake --build build
 Run a TCP server:
 
 ```sh
-./build/nanoev_bench --protocol tcp --role server --host 127.0.0.1 --port 4000
+./build/nanoev_bench --protocol tcp --role server --host 127.0.0.1 --port 4000 --message-size 64
 ```
 
 Run a TCP client:
 
 ```sh
 ./build/nanoev_bench --protocol tcp --role client --host 127.0.0.1 --port 4000 --connections 100 --message-size 64 --duration 30
+```
+
+Run a local nanoev/libevent comparison script:
+
+```sh
+./bench/run_compare.sh
+```
+
+The script runs the scenarios serially, sleeps between runs, and writes raw
+logs plus a TSV summary under `bench/results/`. Useful overrides:
+
+```sh
+DURATION=30 RUNS=5 SLEEP_AFTER_RUN=10 ./bench/run_compare.sh
+SCENARIOS="100:64" ./bench/run_compare.sh
 ```
 
 Useful options:
