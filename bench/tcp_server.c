@@ -48,7 +48,6 @@ struct tcp_server {
     bench_stats previous;
     nanoev_timeval started;
     uint64_t previous_us;
-    int shutting_down;
 };
 
 static nanoev_event *signal_async;
@@ -57,6 +56,7 @@ static void on_signal_async(nanoev_event *async);
 static int install_signal_handler(nanoev_event *async);
 static void on_accept(nanoev_event *tcp, int status, nanoev_event *tcp_new);
 static int server_accept_next(tcp_server *server, nanoev_event *tcp);
+static void server_close_connections(tcp_server *server);
 static void* alloc_userdata(void *context, void *userdata);
 static void conn_close(tcp_server_conn *conn);
 static void conn_unlink(tcp_server_conn *conn);
@@ -143,7 +143,7 @@ int bench_tcp_server_run(const bench_config *config)
         bench_stats_print_total("server", &server.stats, bench_time_diff_ms(&server.started, &ended), 1);
     }
 
-    server.shutting_down = 1;
+    server_close_connections(&server);
     nanoev_event_free(server.report_timer);
     nanoev_event_free(server.async);
     nanoev_event_free(server.listener);
@@ -152,7 +152,7 @@ int bench_tcp_server_run(const bench_config *config)
     return 0;
 
 fail:
-    server.shutting_down = 1;
+    server_close_connections(&server);
     if (server.report_timer)
         nanoev_event_free(server.report_timer);
     if (server.async)
@@ -168,6 +168,12 @@ fail:
 static void on_signal_async(nanoev_event *async)
 {
     nanoev_loop_break(nanoev_event_loop(async));
+}
+
+static void server_close_connections(tcp_server *server)
+{
+    while (server->head)
+        conn_close(server->head);
 }
 
 static int install_signal_handler(nanoev_event *async)
@@ -255,6 +261,8 @@ static void conn_unlink(tcp_server_conn *conn)
         server->head = conn->next;
     if (conn->next)
         conn->next->prev = conn->prev;
+    conn->prev = NULL;
+    conn->next = NULL;
 }
 
 static void conn_close(tcp_server_conn *conn)
@@ -262,9 +270,9 @@ static void conn_close(tcp_server_conn *conn)
     conn_unlink(conn);
     if (conn->tcp)
         nanoev_event_free(conn->tcp);
-    if (conn->server->shutting_down)
-        return;
+    conn->tcp = NULL;
     free(conn->buf);
+    conn->buf = NULL;
     free(conn);
 }
 
