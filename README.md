@@ -64,25 +64,31 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-## Run The Examples
+## Run The Benchmark
 
-Run the UDP loopback test:
-
-```sh
-./build/udp_test
-```
-
-Run the TCP echo server and client in separate terminals:
+Build an optimized benchmark binary:
 
 ```sh
-./build/test_server
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DNANOEV_BUILD_BENCHMARKS=ON
+cmake --build build-release
 ```
+
+Run the TCP echo benchmark server:
 
 ```sh
-./build/test_client
+./build-release/nanoev_bench --protocol tcp --role server --host 127.0.0.1 --port 4000
 ```
 
-Pass `-ipv6` to the example programs to use `::1` instead of `127.0.0.1`.
+Run the TCP benchmark client in another terminal:
+
+```sh
+./build-release/nanoev_bench --protocol tcp --role client --host 127.0.0.1 --port 4000 --connections 100 --message-size 64 --duration 30
+```
+
+The client reports request throughput, transfer rate, errors, and approximate
+latency percentiles. The server reports request counters and splits summary
+errors into accept-layer and established-connection I/O errors. See
+`bench/README.md` for all benchmark options.
 
 ## API Overview
 
