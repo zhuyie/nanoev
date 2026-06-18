@@ -6,7 +6,6 @@
 #include <sys/time.h>
 
 #include <errno.h>
-#include <stdio.h>
 
 /*----------------------------------------------------------------------------*/
 
@@ -34,7 +33,6 @@ poller kqueue_poller_create(void)
     EV_SET(kev, 1, EVFILT_USER, EV_ADD, 0, 0, NULL);
     int ret = kevent(p->kq, kev, 1, NULL, 0, NULL);
     if (ret != 0) {
-        printf("kqueue_poller_create kevent ret=%d,errno=%d\n", ret, errno);
         close(p->kq);
         mem_free(p);
         return NULL;
@@ -67,7 +65,6 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
 
     int reactor_events = proactor->reactor_events;
     if (reactor_events == events) {
-        //printf("kqueue_poller_modify fd=%d,events=%d no change\n", fd, reactor_events);
         return 0;
     }
 
@@ -89,13 +86,11 @@ int kqueue_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int eve
     if (changes_count > 0) {
         int ret = kevent(_p->kq, changes, changes_count, NULL, 0, NULL);
         if (ret != 0) {
-            printf("kqueue_poller_modify kevent ret=%d,errno=%d\n", ret, errno);
             return -1;
         }
         proactor->reactor_events = reactor_events;
     }
 
-    //printf("kqueue_poller_modify fd=%d,events=%d\n", fd, reactor_events);
     return 0;
 }
 
@@ -137,11 +132,9 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
 
     int ret = kevent(_p->kq, NULL, 0, _events, count, ptimeout);
     if (ret == 0) {
-        //printf("kqueue_poller_poll kevent ret=0\n");
         return 0;
     } else if (ret < 0) {
         if (errno != EINTR) {
-            printf("kqueue_poller_poll kevent ret=%d,errno=%d\n", ret, errno);
             return -1;
         } else {
             return 0;
@@ -172,7 +165,6 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
             count++;
         }
     }
-    //printf("kqueue_poller_poll read %d events\n", count);
     return count;
 }
 
@@ -214,7 +206,6 @@ int kqueue_poller_notify(poller p)
     EV_SET(kev, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
     int ret = kevent(_p->kq, kev, 1, NULL, 0, NULL);
     if (ret != 0) {
-        printf("kqueue_poller_notify kevent ret=%d,errno=%d\n", ret, errno);
         return -1;
     }
 

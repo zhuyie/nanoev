@@ -1,7 +1,6 @@
 #ifdef __linux__
 
 #include "nanoev_poller.h"
-#include <stdio.h>
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -72,7 +71,6 @@ int epoll_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int even
     ASSERT(_p->epd >= 0);
 
     if (proactor->reactor_events == events) {
-        //printf("epoll_poller_modify fd=%d,events=%d no change\n", fd, events);
         return 0;
     }
 
@@ -96,12 +94,10 @@ int epoll_poller_modify(poller p, SOCKET fd, nanoev_proactor *proactor, int even
 
     int ret = epoll_ctl(_p->epd, op, fd, &event);
     if (ret != 0) {
-        printf("epoll_poller_modify epoll_ctl ret=%d,errno=%d\n", ret, errno);
         return -1;
     }
     proactor->reactor_events = events;
 
-    //printf("epoll_poller_modify fd=%d,events=%d\n", fd, events);
     return 0;
 }
 
@@ -141,11 +137,9 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
 
     int ret = epoll_wait(_p->epd, _events, count, timeout_in_ms);
     if (ret == 0) {
-        //printf("epoll_poller_poll epoll_wait ret=0\n");
         return 0;
     } else if (ret < 0) {
         if (errno != EINTR) {
-            printf("epoll_poller_poll epoll_wait ret=%d,errno=%d\n", ret, errno);
             return -1;
         } else {
             return 0;
@@ -171,15 +165,11 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
             ctx = proactor->reactor_cb(proactor, _EV_WRITE);
         }
         if (ctx != NULL) {
-            //printf("[%d] epoll_poller_poll events=0x%08x\n", getpid(), _events[i].events);
             events[count].proactor = proactor;
             events[count].ctx = ctx;
             count++;
-        } else {
-            //printf("[%d] epoll_poller_poll reactor_cb return NULL, events=0x%08x\n", getpid(), _events[i].events);
         }
     }
-    //printf("epoll_poller_poll read %d events\n", count);
     return count;
 }
 
@@ -221,7 +211,6 @@ int epoll_poller_notify(poller p)
     uint64_t count = 1;
     int ret = write(_p->notifyfd, &count, sizeof(count));
     if (ret < 0) {
-        printf("epoll_poller_notify write ret=%d,errno=%d\n", ret, errno);
         return -1;
     }
 
