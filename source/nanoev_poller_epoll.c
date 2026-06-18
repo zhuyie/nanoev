@@ -16,6 +16,29 @@ typedef struct _epoll_poller {
     int events_capacity;
 } _epoll_poller;
 
+static int epoll_append_reactor_event(
+    poller_event *events,
+    int count,
+    int max_events,
+    nanoev_proactor *proactor,
+    int reactor_event
+    )
+{
+    io_context *ctx;
+
+    if (count >= max_events)
+        return count;
+
+    ctx = proactor->reactor_cb(proactor, reactor_event);
+    if (ctx != NULL) {
+        events[count].proactor = proactor;
+        events[count].ctx = ctx;
+        count++;
+    }
+
+    return count;
+}
+
 poller epoll_poller_create(void)
 {
     _epoll_poller *p = (_epoll_poller*)mem_alloc(sizeof(_epoll_poller));
@@ -169,16 +192,18 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
         ASSERT(proactor);
         ASSERT(proactor->reactor_cb);
 
-        io_context *ctx = NULL;
         if (_events[i].events & EPOLLIN) {
-            ctx = proactor->reactor_cb(proactor, _EV_READ);
-        } else if (_events[i].events & EPOLLOUT){
-            ctx = proactor->reactor_cb(proactor, _EV_WRITE);
-        }
-        if (ctx != NULL) {
-            events[count].proactor = proactor;
-            events[count].ctx = ctx;
-            count++;
+            count = epoll_append_reactor_event(events, count, max_events, proactor, _EV_READ);
+        } else if (_events[i].events & EPOLLOUT) {
+            count = epoll_append_reactor_event(events, count, max_events, proactor, _EV_WRITE);
+        } else if ((_events[i].events & (EPOLLERR | EPOLLHUP))
+            && !(_events[i].events & (EPOLLIN | EPOLLOUT))) {
+            if (proactor->reactor_events & _EV_READ) {
+                count = epoll_append_reactor_event(events, count, max_events, proactor, _EV_READ);
+            }
+            if (proactor->reactor_events & _EV_WRITE) {
+                count = epoll_append_reactor_event(events, count, max_events, proactor, _EV_WRITE);
+            }
         }
     }
     return count;
