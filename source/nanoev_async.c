@@ -112,7 +112,10 @@ int nanoev_async_start(nanoev_event *event, nanoev_async_callback callback)
     if (pipe(fildes)) {
         return NANOEV_ERROR_FAIL;
     }
-    if (!set_non_blocking(fildes[0], 1) || !set_non_blocking(fildes[1], 1)) {
+    if (!set_close_on_exec(fildes[0], 1)
+        || !set_close_on_exec(fildes[1], 1)
+        || !set_non_blocking(fildes[0], 1)
+        || !set_non_blocking(fildes[1], 1)) {
         close_pipe(fildes[0]);
         close_pipe(fildes[1]);
         return NANOEV_ERROR_FAIL;

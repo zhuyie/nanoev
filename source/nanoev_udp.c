@@ -534,6 +534,10 @@ static int create_udp_socket(nanoev_udp *udp, int family)
 #endif
 
 #ifndef _WIN32
+    if (!set_close_on_exec(udp->sock, 1)) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
     if (!set_non_blocking(udp->sock, 1)) {
         error_code = socket_last_error();
         goto ERROR_EXIT;

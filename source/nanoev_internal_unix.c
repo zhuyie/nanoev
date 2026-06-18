@@ -136,6 +136,15 @@ int set_non_blocking(SOCKET sock, int set)
     return (fcntl(sock, F_SETFL, flags) == 0) ? 1 : 0;
 }
 
+int set_close_on_exec(SOCKET sock, int set)
+{
+    int flags = fcntl(sock, F_GETFD, 0);
+    if (flags == -1)
+        return 0;
+    flags = set ? (flags | FD_CLOEXEC) : (flags & ~FD_CLOEXEC);
+    return (fcntl(sock, F_SETFD, flags) == 0) ? 1 : 0;
+}
+
 void close_socket(SOCKET sock)
 {
     close(sock);

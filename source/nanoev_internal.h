@@ -169,6 +169,7 @@ void close_socket(SOCKET sock);
 int  socket_last_error(void);
 int  socket_timeout_error(void);
 #ifndef _WIN32
+int  set_close_on_exec(SOCKET sock, int set);
 int  socket_would_block(int error_code);
 #endif
 

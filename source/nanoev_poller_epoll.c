@@ -27,8 +27,19 @@ poller epoll_poller_create(void)
         mem_free(p);
         return NULL;
     }
+    if (!set_close_on_exec(p->epd, 1)) {
+        close(p->epd);
+        mem_free(p);
+        return NULL;
+    }
 
     p->notifyfd = eventfd(0, 0);
+    if (p->notifyfd != -1) {
+        if (!set_close_on_exec(p->notifyfd, 1)) {
+            close(p->notifyfd);
+            p->notifyfd = -1;
+        }
+    }
     if (p->notifyfd != -1) {
         struct epoll_event event;
         event.data.fd = p->notifyfd;

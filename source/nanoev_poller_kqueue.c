@@ -28,6 +28,11 @@ poller kqueue_poller_create(void)
         mem_free(p);
         return NULL;
     }
+    if (!set_close_on_exec(p->kq, 1)) {
+        close(p->kq);
+        mem_free(p);
+        return NULL;
+    }
 
     struct kevent kev[1];
     EV_SET(kev, 1, EVFILT_USER, EV_ADD, 0, 0, NULL);

@@ -338,6 +338,10 @@ int nanoev_tcp_accept(
 #else
     socket_accept = accept(tcp->sock, NULL, NULL);
     if (socket_accept != INVALID_SOCKET) {
+        if (!set_close_on_exec(socket_accept, 1)) {
+            error_code = errno;
+            goto ERROR_EXIT;
+        }
         tcp->ctx_read.status = 0;
         tcp->ctx_read.bytes = socket_accept;
         tcp->socket_accept = socket_accept;
@@ -1067,8 +1071,15 @@ nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCK
     if (!tcp)
         return NULL;
 
+    tcp->family = family;
+    tcp->sock = socket;
+
 #ifndef _WIN32
     if (!set_non_blocking(socket, 1)) {
+        tcp_free((nanoev_event*)tcp);
+        return NULL;
+    }
+    if (!set_close_on_exec(socket, 1)) {
         tcp_free((nanoev_event*)tcp);
         return NULL;
     }
@@ -1080,8 +1091,6 @@ nanoev_tcp* tcp_alloc_client(nanoev_loop *loop, void *userdata, int family, SOCK
     }
 
     tcp->flags |= NANOEV_TCP_FLAG_CONNECTED;
-    tcp->family = family;
-    tcp->sock = socket;
     
     return tcp;
 }
@@ -1117,6 +1126,13 @@ static io_context* reactor_cb(nanoev_proactor *proactor, int events)
             /* accept */
             int fd = accept(tcp->sock, NULL, NULL);
             if (fd >= 0) {
+                if (!set_close_on_exec(fd, 1)) {
+                    tcp->ctx_read.status = errno;
+                    tcp->ctx_read.bytes = 0;
+                    tcp->socket_accept = INVALID_SOCKET;
+                    close_socket(fd);
+                    return &(tcp->ctx_read);
+                }
                 tcp->ctx_read.status = 0;
                 tcp->ctx_read.bytes = 0;
                 tcp->socket_accept = fd;
@@ -1191,6 +1207,10 @@ static int create_tcp_socket(nanoev_tcp *tcp, int family)
 #endif
 
 #ifndef _WIN32
+    if (!set_close_on_exec(tcp->sock, 1)) {
+        error_code = socket_last_error();
+        goto ERROR_EXIT;
+    }
     if (!set_non_blocking(tcp->sock, 1)) {
         error_code = socket_last_error();
         goto ERROR_EXIT;
