@@ -29,6 +29,7 @@ typedef struct nanoev_async nanoev_async;
 static void __async_proactor_callback(nanoev_proactor *proactor, io_context *ctx);
 static io_context* reactor_cb(nanoev_proactor *proactor, int events);
 
+#define NANOEV_ASYNC_FLAG_READING      NANOEV_PROACTOR_FLAG_READING
 #define NANOEV_ASYNC_FLAG_DELETED      NANOEV_PROACTOR_FLAG_DELETED
 
 /*----------------------------------------------------------------------------*/
@@ -63,7 +64,7 @@ void async_free(nanoev_event *event)
     nanoev_async *async = (nanoev_async*)event;
 
     mutex_lock(&async->lock);
-    if (async->async_sent) {
+    if (async->async_sent || (async->flags & NANOEV_ASYNC_FLAG_READING)) {
         /* lazy delete */
         add_endgame_proactor(async->loop, (nanoev_proactor*)async);
         mutex_unlock(&async->lock);
@@ -155,14 +156,21 @@ int nanoev_async_send(nanoev_event *event)
         ret = NANOEV_SUCCESS;
         goto my_exit;
     }
+    if (async->flags & NANOEV_ASYNC_FLAG_READING) {
+        ret = NANOEV_ERROR_ACCESS_DENIED;
+        goto my_exit;
+    }
     /* still holding the lock... */
 
 #ifdef _WIN32
+    memset(&async->ctx, 0, sizeof(io_context));
     if (ReadFile(async->pipe_r, &async->pipe_read_buf, 1, NULL, &async->ctx) || GetLastError() != ERROR_IO_PENDING) {
         ret = NANOEV_ERROR_FAIL;
         goto my_exit;
     }
+    async->flags |= NANOEV_ASYNC_FLAG_READING;
     if (!WriteFile(async->pipe_w, buf, 1, &cbWritten, NULL)) {
+        CancelIo(async->pipe_r);
         ret = NANOEV_ERROR_FAIL;
         goto my_exit;
     }
@@ -187,15 +195,22 @@ my_exit:
 void __async_proactor_callback(nanoev_proactor *proactor, io_context *ctx)
 {
     int async_sent;
+    int status;
     nanoev_async *async = (nanoev_async*)proactor;
-    (void)ctx;
+
+#ifdef _WIN32
+    status = ntstatus_to_winsock_error((long)ctx->Internal);
+#else
+    status = ctx->status;
+#endif
 
     mutex_lock(&async->lock);
     async_sent = async->async_sent; 
     async->async_sent = 0;
+    async->flags &= ~NANOEV_ASYNC_FLAG_READING;
     mutex_unlock(&async->lock);
 
-    if (async_sent && !(async->flags & NANOEV_ASYNC_FLAG_DELETED)) {
+    if (async_sent && status == 0 && !(async->flags & NANOEV_ASYNC_FLAG_DELETED)) {
         async->on_async((nanoev_event*)async);
     }
 }
