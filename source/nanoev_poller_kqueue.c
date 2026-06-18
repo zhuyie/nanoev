@@ -103,39 +103,31 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
 {
     _kqueue_poller *_p = (_kqueue_poller*)p;
     ASSERT(_p->kq >= 0);
-    int count0 = 0, count1 = 0;
+    int count = 0;
 
     if (_p->events_count > 0) {
-        count0 = _p->events_count;
-        if (count0 > max_events)
-            count0 = max_events;
+        count = _p->events_count;
+        if (count > max_events)
+            count = max_events;
 
-        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count0);
-        _p->events_count -= count0;
+        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count);
+        _p->events_count -= count;
         if (_p->events_count > 0) {
-            _p->events_start += count0;
+            _p->events_start += count;
         } else {
             _p->events_start = 0;
         }
 
-        events += count0;
-        max_events -= count0;
-        if (max_events == 0) {
-            return count0;
-        } 
+        return count;
     }
 
     struct kevent _events[256];
-    count1 = sizeof(_events) / sizeof(_events[0]);
-    if (count1 > max_events)
-        count1 = max_events;
+    count = sizeof(_events) / sizeof(_events[0]);
+    if (count > max_events)
+        count = max_events;
 
     struct timespec _timeout, *ptimeout;
-    if (count0 > 0) {
-        _timeout.tv_sec = 0;
-        _timeout.tv_nsec = 0;
-        ptimeout = &_timeout;
-    } else if (timeout->tv_sec != -1) {
+    if (timeout->tv_sec != -1) {
         _timeout.tv_sec = timeout->tv_sec;
         _timeout.tv_nsec = timeout->tv_usec * 1000;
         ptimeout = &_timeout;
@@ -143,20 +135,20 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
         ptimeout = NULL;
     }
 
-    int ret = kevent(_p->kq, NULL, 0, _events, count1, ptimeout);
+    int ret = kevent(_p->kq, NULL, 0, _events, count, ptimeout);
     if (ret == 0) {
         //printf("kqueue_poller_poll kevent ret=0\n");
-        return count0;
+        return 0;
     } else if (ret < 0) {
         if (errno != EINTR) {
             printf("kqueue_poller_poll kevent ret=%d,errno=%d\n", ret, errno);
             return -1;
         } else {
-            return count0;
+            return 0;
         }
     }
 
-    count1 = 0;
+    count = 0;
     for (int i = 0; i < ret; i++) {
         if (_events[i].filter == EVFILT_USER) {
             ASSERT(_events[i].ident == 1);
@@ -175,13 +167,13 @@ int kqueue_poller_poll(poller p, poller_event *events, int max_events, const nan
             ctx = proactor->reactor_cb(proactor, _EV_WRITE);
         }
         if (ctx != NULL) {
-        	events[count1].proactor = proactor;
-        	events[count1].ctx = ctx;
-        	count1++;
+            events[count].proactor = proactor;
+            events[count].ctx = ctx;
+            count++;
         }
     }
     //printf("kqueue_poller_poll read %d events\n", count);
-    return count0 + count1;
+    return count;
 }
 
 int kqueue_poller_submit(poller p, const poller_event *event)

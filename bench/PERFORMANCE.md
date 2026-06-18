@@ -6,7 +6,7 @@ and `libevent_bench`. The libevent benchmark uses the conventional
 
 ## Environment
 
-- Date: 2026-06-11
+- Date: 2026-06-18
 - Host: Apple M2 Max, macOS Darwin 25.5.0 arm64
 - File descriptor limit: `1048575`
 - Build type: `Release`
@@ -29,10 +29,7 @@ throughput and latency signal because the server was started before the client
 and stopped manually after the client exited.
 
 Server error summaries are still recorded to catch accept or I/O errors. In
-this run, all client summaries reported `errors=0`. nanoev server summaries
-reported a few accept errors under higher connection pressure; libevent server
-summaries reported none. The nanoev accept errors were `accept` category only,
-with `io=0`, and did not correspond to failed client requests in this run.
+this run, all client and server summaries reported `errors=0`.
 
 ## Runner
 
@@ -49,43 +46,43 @@ writes raw logs plus TSV summaries under `bench/results/`.
 
 | Scenario | nanoev req/s | libevent req/s | Delta | nanoev MiB/s | libevent MiB/s |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 10 conn, 64B | 275.49k/s | 221.56k/s | +24.3% | 18.92 | 15.21 |
-| 100 conn, 64B | 283.00k/s | 255.35k/s | +10.8% | 19.43 | 17.53 |
-| 500 conn, 64B | 298.59k/s | 249.54k/s | +19.7% | 20.50 | 17.13 |
-| 100 conn, 1024B | 247.82k/s | 221.32k/s | +12.0% | 243.90 | 217.82 |
+| 10 conn, 64B | 274.87k/s | 223.52k/s | +23.0% | 18.87 | 15.35 |
+| 100 conn, 64B | 283.25k/s | 259.06k/s | +9.3% | 19.45 | 17.79 |
+| 500 conn, 64B | 296.90k/s | 268.74k/s | +10.5% | 20.39 | 18.45 |
+| 100 conn, 1024B | 250.46k/s | 231.18k/s | +8.3% | 246.50 | 227.53 |
 
 ## Latency
 
 | Scenario | nanoev avg | nanoev p50 | nanoev p95 | nanoev p99 | libevent avg | libevent p50 | libevent p95 | libevent p99 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 10 conn, 64B | 29us | 32us | 64us | 64us | 45us | 64us | 64us | 128us |
-| 100 conn, 64B | 349us | 512us | 512us | 1024us | 391us | 512us | 512us | 1024us |
-| 500 conn, 64B | 1542us | 2048us | 4096us | 4096us | 2002us | 2048us | 4096us | 8192us |
-| 100 conn, 1024B | 350us | 512us | 512us | 1024us | 451us | 512us | 1024us | 1024us |
+| 10 conn, 64B | 36us | 64us | 64us | 64us | 44us | 64us | 64us | 128us |
+| 100 conn, 64B | 353us | 512us | 1024us | 1024us | 385us | 512us | 512us | 1024us |
+| 500 conn, 64B | 1683us | 2048us | 4096us | 4096us | 1860us | 2048us | 2048us | 4096us |
+| 100 conn, 1024B | 398us | 512us | 1024us | 1024us | 432us | 512us | 512us | 1024us |
 
 ## Run Spread
 
 | Scenario | nanoev req/s runs | libevent req/s runs |
 | --- | --- | --- |
-| 10 conn, 64B | 274.46k/s, 278.17k/s, 275.49k/s | 221.88k/s, 220.84k/s, 221.56k/s |
-| 100 conn, 64B | 283.00k/s, 280.78k/s, 285.68k/s | 256.41k/s, 253.26k/s, 255.35k/s |
-| 500 conn, 64B | 297.34k/s, 298.59k/s, 299.03k/s | 247.38k/s, 249.54k/s, 250.63k/s |
-| 100 conn, 1024B | 249.07k/s, 247.82k/s, 245.28k/s | 221.32k/s, 222.11k/s, 221.19k/s |
+| 10 conn, 64B | 275.41k/s, 274.87k/s, 265.67k/s | 223.52k/s, 224.32k/s, 205.65k/s |
+| 100 conn, 64B | 286.49k/s, 283.25k/s, 277.08k/s | 258.22k/s, 259.06k/s, 260.26k/s |
+| 500 conn, 64B | 298.97k/s, 265.46k/s, 296.90k/s | 251.88k/s, 268.74k/s, 269.53k/s |
+| 100 conn, 1024B | 250.46k/s, 218.58k/s, 252.75k/s | 231.18k/s, 232.26k/s, 230.76k/s |
 
 ## Server Error Summary
 
 | Scenario | nanoev server errors | libevent server errors |
 | --- | ---: | ---: |
-| 10 conn, 64B | 2, 1, 2 | 0, 0, 0 |
-| 100 conn, 64B | 1, 0, 0 | 0, 0, 0 |
-| 500 conn, 64B | 47, 39, 26 | 0, 0, 0 |
-| 100 conn, 1024B | 2, 13, 10 | 0, 0, 0 |
+| 10 conn, 64B | 0, 0, 0 | 0, 0, 0 |
+| 100 conn, 64B | 0, 0, 0 | 0, 0, 0 |
+| 500 conn, 64B | 0, 0, 0 | 0, 0, 0 |
+| 100 conn, 1024B | 0, 0, 0 | 0, 0, 0 |
 
 ## Interpretation
 
 In this localhost echo benchmark, nanoev is ahead of the libevent bufferevent
-implementation in all measured median results. The lead ranges from about 11% in
-the 100 connection, 64-byte case to about 24% in the 10 connection, 64-byte case.
+implementation in all measured median results. The lead ranges from about 8% in
+the 100 connection, 1024-byte case to about 23% in the 10 connection, 64-byte case.
 Latency averages are also lower for nanoev in the median runs, while bucketed
 tail percentiles are broadly similar.
 

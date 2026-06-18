@@ -109,32 +109,28 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
 {
     _epoll_poller *_p = (_epoll_poller*)p;
     ASSERT(_p->epd >= 0);
-    int count0 = 0, count1 = 0;
+    int count = 0;
 
     if (_p->events_count > 0) {
-        count0 = _p->events_count;
-        if (count0 > max_events)
-            count0 = max_events;
+        count = _p->events_count;
+        if (count > max_events)
+            count = max_events;
 
-        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count0);
-        _p->events_count -= count0;
+        memcpy(events, _p->events + _p->events_start, sizeof(poller_event)*count);
+        _p->events_count -= count;
         if (_p->events_count > 0) {
-            _p->events_start += count0;
+            _p->events_start += count;
         } else {
             _p->events_start = 0;
         }
 
-        events += count0;
-        max_events -= count0;
-        if (max_events == 0) {
-            return count0;
-        } 
+        return count;
     }
 
     struct epoll_event _events[256];
-    count1 = sizeof(_events) / sizeof(_events[0]);
-    if (count1 > max_events)
-        count1 = max_events;
+    count = sizeof(_events) / sizeof(_events[0]);
+    if (count > max_events)
+        count = max_events;
 
     int timeout_in_ms;
     if (timeout->tv_sec != -1) {
@@ -143,24 +139,24 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
         timeout_in_ms = -1;
     }
 
-    int ret = epoll_wait(_p->epd, _events, count1, timeout_in_ms);
+    int ret = epoll_wait(_p->epd, _events, count, timeout_in_ms);
     if (ret == 0) {
         //printf("epoll_poller_poll epoll_wait ret=0\n");
-        return count0;
+        return 0;
     } else if (ret < 0) {
         if (errno != EINTR) {
             printf("epoll_poller_poll epoll_wait ret=%d,errno=%d\n", ret, errno);
             return -1;
         } else {
-            return count0;
+            return 0;
         }
     }
 
-    count1 = 0;
+    count = 0;
     for (int i = 0; i < ret; i++) {
         if (_events[i].data.fd == _p->notifyfd) {
-            uint64_t count;
-            read(_p->notifyfd, &count, sizeof(count));
+            uint64_t notify_count;
+            read(_p->notifyfd, &notify_count, sizeof(notify_count));
             continue;
         }
 
@@ -176,15 +172,15 @@ int epoll_poller_poll(poller p, poller_event *events, int max_events, const nano
         }
         if (ctx != NULL) {
             //printf("[%d] epoll_poller_poll events=0x%08x\n", getpid(), _events[i].events);
-            events[count1].proactor = proactor;
-            events[count1].ctx = ctx;
-            count1++;
+            events[count].proactor = proactor;
+            events[count].ctx = ctx;
+            count++;
         } else {
             //printf("[%d] epoll_poller_poll reactor_cb return NULL, events=0x%08x\n", getpid(), _events[i].events);
         }
     }
     //printf("epoll_poller_poll read %d events\n", count);
-    return count0 + count1;
+    return count;
 }
 
 int epoll_poller_submit(poller p, const poller_event *event)
